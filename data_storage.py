@@ -1,84 +1,184 @@
 import uuid
 from pathlib import Path
 from dataclasses import dataclass, asdict, field
+import json
+
+from typing import List, Optional, Dict, Any, Set
 
 
 class DataGraph(object):
     """docstring for DataGraph"""
-    def __init__(self):
+    def __init__(self) -> None:
         super(DataGraph, self).__init__()
 
-        self.namespaces = {}
-        self.classes = {}
+        self.namespaces: Dict[str, 'DataNamespace'] = {}
+        self.classes: Dict[str, type]  = {}
 
-    def has_namespace_registered(self, name):
+    def has_namespace_registered(self, name: str) -> bool:
         return name in self.namespaces
 
-    def add_namepace(self, namespace):
+    def add_namepace(self, namespace: 'DataNamespace') -> None:
         if not self.has_namespace_registered(namespace.name):
             self.namespaces[namespace.name] = namespace
         namespace.set_graph(self)
 
-    def save(self):
+    def save(self) -> None:
         for n in self.namespaces.values():
             n.save()
 
-    def get_object(self, key):
+    def get_object(self, key: str) -> Optional['DataObject']:
         for n in self.namespaces.values():
             if n.has_object(key):
                 return n.get_object(key)
         return None
 
-    def register_class(self, cl):
+    def register_class(self, cl: type) -> None:
         if cl.__name__ in self.classes:
             raise Exception(f"The class {cl.__name__} has been already registered")
         self.classes[cl.__name__] = cl
 
-    def get_class(self, clname):
+    def get_class(self, clname: str) -> type:
         return self.classes[clname]
 
-    def get_objects(self):
+    def get_objects(self) -> List['DataObject']:
         ret = []
         for n in self.namespaces.values():
             ret += list(n.get_objects())
         return ret
 
 
+class NameSpaceWriter(object):
+    """docstring for NameSpaceWriter"""
+    def __init__(self) -> None:
+        super(NameSpaceWriter, self).__init__()
+
+    def node_keys(self) -> List[str]:
+        return []
+
+    def read(self, node_key: str, data_key: str) -> Optional[str]:
+        return None
+
+    def write(self, node_key: str, data_key: str, value: str) -> None:
+        pass
+
+
+from IPython import embed
+
+import pygit2
+repo = pygit2.Repository('data')
+
+
+class NameSpaceGitWriter(NameSpaceWriter):
+    """docstring for NameSpaceGitWriter"""
+    def __init__(self, path: Path, ref: str = 'refs/heads/master') -> None:
+        super(NameSpaceGitWriter, self).__init__()
+
+        self.repo = pygit2.Repository(path)
+        self.ref = ref
+
+        if self.ref not in self.repo.references:
+            author = pygit2.Signature('a b', 'a@b')
+            committer = author
+            commit_message = 'Initial commit'
+
+            index = pygit2.Index()
+            tid = index.write_tree(self.repo)
+
+            repo.create_commit(self.ref, author, committer, commit_message, tid, [])
+
+    def node_keys(self) -> List[str]:
+        # TODO: This should be a generator.
+        ret = []
+
+        ref = self.repo.references[self.ref].target
+        tree = self.repo[ref].tree
+        for obj in tree:
+            # TODO: Use another way to check if it is a tree node.
+            if obj.type_str == 'tree':
+                for obj2 in self.repo[obj.id]:
+                    ret.append(obj2.name)
+
+        return ret
+
+    def read(self, node_key: str, data_key: str) -> Optional[str]:
+        ref = self.repo.references[self.ref].target
+        tree = self.repo[ref].tree
+
+        try:
+            ret = tree[node_key[:2]][node_key][data_key].data.decode('utf-8')
+            if isinstance(ret, str):
+                return ret
+            else:
+                raise Exception("This should be a string")
+        except:
+            # TODO: Should only catch the non existing error.
+            return None
+
+    def write(self, node_key: str, data_key: str, value: str) -> None:
+
+        node_path = Path(node_key[:2]) / node_key
+        data_path = node_path / data_key
+
+        ref = self.repo.references[self.ref].target
+
+        tree = self.repo[ref].tree
+
+        index = pygit2.Index()
+
+        index.read_tree(tree)
+
+        blob = self.repo.create_blob(value)
+        new_entry = pygit2.IndexEntry(str(data_path), blob, pygit2.GIT_FILEMODE_BLOB)
+
+        index.add(new_entry)
+
+        tid = index.write_tree(self.repo)
+
+        diff = tree.diff_to_tree(self.repo[tid])
+
+        if len(list(diff.deltas)):
+            author = pygit2.Signature('a b', 'a@b')
+            committer = author
+            commit_message = 'Add new entry'
+
+            oid = repo.create_commit(
+                    self.ref,
+                    author, committer, commit_message, tid, [ref])
+            #TODO: What to do with this oid?
+
+
 class DataNamespace(object):
-    """docstring for DataNamespace"""
-    def __init__(self, graph, name, path):
+    def __init__(self, graph: DataGraph, name: str, backend: 'NameSpaceWriter') -> None:
         super(DataNamespace, self).__init__()
         self.name = name
-        #self.graph = graph
-        self.path = Path(path)
 
-        #self.graph.add_namepace(self)
+        self.backend = backend
 
-        self.objects = {}
+        self.objects: Dict[str, 'DataObject'] = {}
 
-        self.graph = None
+        self.graph: Optional['DataGraph'] = None
         graph.add_namepace(self)
 
-    def get_object_keys(self):
-        #TODO
-        return set(self.objects.keys()) | set([x.name for x in  self.path.glob('*/*')] )
+    def get_object_keys(self) -> Set[str]:
+        #TODO: Use generators for this?
+        return set(self.objects.keys()) | set(self.backend.node_keys())
 
-    def get_objects(self):
+    def get_objects(self) -> List['DataObject']:
         ret = []
         for key in self.get_object_keys():
             ret.append(self.get_object(key))
         return ret
 
-    def save(self):
+    def save(self) -> None:
         for obj in self.objects.values():
             obj.save()
 
-    def set_graph(self, graph):
+    def set_graph(self, graph: DataGraph) -> None:
         self.graph = graph
         if not graph.has_namespace_registered(self.name):
             graph.add_namepace(self)
 
-    def get_object(self, key):
+    def get_object(self, key: str) -> 'DataObject':
         # TODO: Check if there is already this key in the graph, then return it
         # TODO: Otherwise create this object in the Namespace and return it
 
@@ -89,34 +189,68 @@ class DataNamespace(object):
         # of this object, then I instantiate this specific class.
 
         clname =  None
-        with open(self.path / key[:2] / key / 'cl.txt', 'r') as f:
-            clname = f.read()
+        clname = self.backend.read(key, 'cl.txt')
 
-        cl = self.graph.get_class(clname)
-        obj = cl(self, key)
-        self.register_object(obj)
+        if clname is None:
+            raise Exception(f'Failed to read the class type for object {key}')
 
-        return obj
+        if self.graph is None:
+            raise Exception(f'No graph registered!')
+        else:
+            cl = self.graph.get_class(clname)
+            if cl is None:
+                raise Exception(f'Class {clname} is not supported')
+            else:
+                obj = cl(self, key)
 
-    def has_object(self, key):
+                if not isinstance(obj, DataObject):
+                    raise Exception(f'Object {obj} should be an instance of DataObject')
+
+                self.register_object(obj)
+                return obj
+
+    def has_object(self, key: str) -> bool:
         # TODO: I could check locally, otherwise also check in the filesystem
         return key in self.objects
 
-    def register_object(self, obj):
+    def register_object(self, obj: 'DataObject') -> None:
         if not self.has_object(obj.key):
             self.objects[obj.key] = obj
 
-        
-#@dataclass
-class DataObject:
+
+class DataObjectEncoder(json.JSONEncoder):
+    def __init__(self, graph: 'DataGraph') -> None:
+        super(DataObjectEncoder, self).__init__()
+        self.graph = graph
+
+    def default(self, value: Any) -> Any:
+        if isinstance(value, DataObject):
+            return {
+                    '_type': 'DataObject',
+                    'key': value.key
+                    }
+        else:
+            return super().default(value)
+
+
+class DataObjectDecoder(object):
+    def __init__(self, graph: 'DataGraph') -> None:
+        super(DataObjectDecoder, self).__init__()
+        self.graph = graph
+
+    def object_hook(self, value: Dict[str, Any]) -> Any:
+        if '_type' in value:
+            if value['_type'] == 'DataObject':
+                return self.graph.get_object(value['key'])
+        return value
+
+
+class DataObject(object):
     namespace: DataNamespace
-    key: str = None
+    key: str
 
     """docstring for DataObject"""
-    def __init__(self, namespace, key=None, **kwargs):
-        #super(DataObject, self).__init__(namespace, key)
-
-        # TODO(witt): Sanity check the key format.
+    def __init__(self, namespace: 'DataNamespace', key: Optional[str] = None, **kwargs) -> None:
         self.namespace = namespace
         if key is None:
             self.key = uuid.uuid4().hex
@@ -130,116 +264,89 @@ class DataObject:
         for name, value in kwargs.items():
             setattr(self, name, value)
 
-    def _save(self):
-        outpath = self.__path()
-        outpath.mkdir(parents=True, exist_ok=True)
+    def _save(self) -> None:
+        self.namespace.backend.write(self.key, 'cl.txt', type(self).__name__)
 
-        # TODO: Find a way to not rewrite this all the time
-        classfile = outpath / 'cl.txt'
-        with open(classfile, 'w') as f:
-            f.write(type(self).__name__)
-
-    def __path(self):
-        if self.key is None:
-            self.key = uuid.uuid4().hex
-
-        outpath = self.namespace.path / self.key[:2] / self.key
-        outpath.mkdir(parents=True, exist_ok=True)
-        return outpath
-
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
         if name.startswith('_') or (name in ['namespace', 'key']):
-            return super(DataObject, self).__getattr__(name)
-
-        with open(self.__path() / name, 'r') as f:
-            value = f.read()
-            if value.startswith('DataObject:'):
-                key = value.replace('DataObject:', '')
-                return self.namespace.get_object(key)
+            value = super(DataObject, self).__getattr__(name)
             return value
-        #return self.data.get(name, None)
 
-    def __setattr__(self, name, value):
+        value_str = self.namespace.backend.read(self.key, name)
+
+        if value_str is None:
+            raise Exception(f'Failed to get value for {name}.')
+
+        if self.namespace.graph is None:
+            raise Exception(f'Namespace must be attached to a graph.')
+
+        decoder = DataObjectDecoder(self.namespace.graph)
+        value = json.loads(value_str, object_hook=decoder.object_hook)
+
+        return value['value']
+
+    def __setattr__(self, name: str, value: Any) -> None:
         if name.startswith('_') or (name in ['namespace', 'key']):
             super(DataObject, self).__setattr__(name, value)
             return
 
         try:
             super(DataObject, self).__setattr__(name, value)
-            with open(self.__path() / name, 'w') as f:
-                if isinstance(value, DataObject):
-                    f.write(f'DataObject:{value.key}')
-                else:
-                    f.write(value)
+
+            outvalue = {
+                    'type': type(value).__name__,
+                    'value': value
+                    }
+
+            if self.namespace.graph is None:
+                raise Exception(f'Namespace must be attached to a graph.')
+
+            encoder = DataObjectEncoder(self.namespace.graph)
+
+            self.namespace.backend.write(self.key, name, json.dumps(outvalue,
+                default=encoder.default))
+
         except Exception as e:
             raise(e)
 
-    def __getitem__(self, name):
-        import pdb; pdb.set_trace()
-        if name.startswith('_') or (name in ['namespace', 'key']):
-            return super(DataObject, self).__getitem__(name)
+    def __getitem__(self, name: str) -> Any:
+        return self.__getattr__(name)
 
-        with open(self.__path() / name, 'r') as f:
-            value = f.read()
-            if value.startswith('DataObject:'):
-                key = value.replace('DataObject:', '')
-                return self.namespace.get_object(key)
-            return value
-        #return self.data.get(name, None)
-
-    def __str__(self):
+    def __str__(self) -> str:
         return f'<{type(self).__name__} key: {self.key}>'
 
 
-#@dataclass
 class DataObject2(DataObject):
     """docstring for DataObject2"""
     name: str
     otherobj: DataObject
-    #def __init__(self, namespace, key=None):
-    #    super(DataObject2, self).__init__(namespace, key)
+    foobar: List[int]
+    hey: List[DataObject]
 
-
-    def __str__(self):
-        return f'<{type(self).__name__} name: {repr(self.name)} otherobj: {self.otherobj}>'
-
+    def __str__(self) -> str:
+        return f'<{type(self).__name__} key: {self.key} name: {repr(self.name)}>'
 
 
 g = DataGraph()
-n = DataNamespace(g, 'data', 'data')
+
+nw = NameSpaceGitWriter(Path('data'), 'refs/heads/master')
+
+n = DataNamespace(g, 'data', nw)
 
 g.register_class(DataObject)
 g.register_class(DataObject2)
 
-#g.add_namepace(n)
+a = DataObject(n, '1af852330e2c4e419c77923faf00f38c')
 
-#print(n.get_objects())
-
-
-#a = DataObject(n, '1af852330e2c4e419c77923faf00f38c')
-#a = DataObject(n)
-#b = DataObject2(n)
-
-#print(a)
-#print(n.get_object(a.key))
-#print(g.get_object(a.key))
-
-#print(type(a))
-#print(type(b))
-
-
-
-#b = DataObject2(n, key='60b20f9340894410b18133b53823a3f5', name="hey")
+b = DataObject2(n, key='60b20f9340894410b18133b53823a3f5')
 #b.name = 'Foo'
 #b.hello = 'world'
 #b.otherobj = a
-#print(b)
+#
+#b.hey = [a, a, b]
+#b.foobar = [1]
 
-#c = DataObject2(n, key='60b20f9340894410b18133b53823a3f5')
-#c.name = c.name.strip()
-#print(c.name)
-#print(c.hello)
-#print(c.otherobj)
 
 for o in g.get_objects():
     print(o)
+
