@@ -5,14 +5,17 @@ import json
 
 from typing import List, Optional, Dict, Any, Set
 
+from IPython import embed
+
+import pygit2
+
 
 class DataGraph(object):
-    """docstring for DataGraph"""
     def __init__(self) -> None:
         super(DataGraph, self).__init__()
 
         self.namespaces: Dict[str, 'DataNamespace'] = {}
-        self.classes: Dict[str, type]  = {}
+        self.classes: Dict[str, type] = {}
 
     def has_namespace_registered(self, name: str) -> bool:
         return name in self.namespaces
@@ -48,7 +51,6 @@ class DataGraph(object):
 
 
 class NameSpaceWriter(object):
-    """docstring for NameSpaceWriter"""
     def __init__(self) -> None:
         super(NameSpaceWriter, self).__init__()
 
@@ -62,14 +64,7 @@ class NameSpaceWriter(object):
         pass
 
 
-from IPython import embed
-
-import pygit2
-repo = pygit2.Repository('data')
-
-
 class NameSpaceGitWriter(NameSpaceWriter):
-    """docstring for NameSpaceGitWriter"""
     def __init__(self, path: Path, ref: str = 'refs/heads/master') -> None:
         super(NameSpaceGitWriter, self).__init__()
 
@@ -105,7 +100,7 @@ class NameSpaceGitWriter(NameSpaceWriter):
         tree = self.repo[ref].tree
 
         try:
-            ret = tree[node_key[:2]][node_key][data_key].data.decode('utf-8')
+            ret = tree['objects'][node_key[:2]][node_key][data_key].data.decode('utf-8')
             if isinstance(ret, str):
                 return ret
             else:
@@ -115,8 +110,7 @@ class NameSpaceGitWriter(NameSpaceWriter):
             return None
 
     def write(self, node_key: str, data_key: str, value: str) -> None:
-
-        node_path = Path(node_key[:2]) / node_key
+        node_path = Path('objects') / node_key[:2] / node_key
         data_path = node_path / data_key
 
         ref = self.repo.references[self.ref].target
@@ -188,7 +182,7 @@ class DataNamespace(object):
         # TODO: How do I properly choose the class. The idea is to have a field informing the class
         # of this object, then I instantiate this specific class.
 
-        clname =  None
+        clname = None
         clname = self.backend.read(key, 'cl.txt')
 
         if clname is None:
@@ -249,7 +243,6 @@ class DataObject(object):
     namespace: DataNamespace
     key: str
 
-    """docstring for DataObject"""
     def __init__(self, namespace: 'DataNamespace', key: Optional[str] = None, **kwargs) -> None:
         self.namespace = namespace
         if key is None:
@@ -317,7 +310,6 @@ class DataObject(object):
 
 
 class DataObject2(DataObject):
-    """docstring for DataObject2"""
     name: str
     otherobj: DataObject
     foobar: List[int]
@@ -327,26 +319,25 @@ class DataObject2(DataObject):
         return f'<{type(self).__name__} key: {self.key} name: {repr(self.name)}>'
 
 
-g = DataGraph()
+if __name__ == "__main__":
+    g = DataGraph()
 
-nw = NameSpaceGitWriter(Path('data'), 'refs/heads/master')
+    nw = NameSpaceGitWriter(Path('data'), 'refs/heads/master')
 
-n = DataNamespace(g, 'data', nw)
+    n = DataNamespace(g, 'data', nw)
 
-g.register_class(DataObject)
-g.register_class(DataObject2)
+    g.register_class(DataObject)
+    g.register_class(DataObject2)
 
-a = DataObject(n, '1af852330e2c4e419c77923faf00f38c')
+    a = DataObject(n, '1af852330e2c4e419c77923faf00f38c')
 
-b = DataObject2(n, key='60b20f9340894410b18133b53823a3f5')
-#b.name = 'Foo'
-#b.hello = 'world'
-#b.otherobj = a
-#
-#b.hey = [a, a, b]
-#b.foobar = [1]
+    b = DataObject2(n, key='60b20f9340894410b18133b53823a3f5')
+    #b.name = 'Foo'
+    #b.hello = 'world'
+    #b.otherobj = a
+    #
+    #b.hey = [a, a, b]
+    #b.foobar = [1]
 
-
-for o in g.get_objects():
-    print(o)
-
+    for o in g.get_objects():
+        print(o)
