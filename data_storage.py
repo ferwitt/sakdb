@@ -79,14 +79,14 @@ class NameSpaceGitWriter(NameSpaceWriter):
             index = pygit2.Index()
             tid = index.write_tree(self.repo)
 
-            repo.create_commit(self.ref, author, committer, commit_message, tid, [])
+            self.repo.create_commit(self.ref, author, committer, commit_message, tid, [])
 
     def node_keys(self) -> List[str]:
         # TODO: This should be a generator.
         ret = []
 
         ref = self.repo.references[self.ref].target
-        tree = self.repo[ref].tree
+        tree = self.repo[ref].tree['objects']
         for obj in tree:
             # TODO: Use another way to check if it is a tree node.
             if obj.type_str == 'tree':
@@ -135,7 +135,7 @@ class NameSpaceGitWriter(NameSpaceWriter):
             committer = author
             commit_message = 'Add new entry'
 
-            oid = repo.create_commit(
+            oid = self.repo.create_commit(
                     self.ref,
                     author, committer, commit_message, tid, [ref])
             #TODO: What to do with this oid?
@@ -268,7 +268,9 @@ class DataObject(object):
         value_str = self.namespace.backend.read(self.key, name)
 
         if value_str is None:
-            raise Exception(f'Failed to get value for {name}.')
+            #TODO: Should this thing here fail?
+            #raise Exception(f'Failed to get value for {name}.')
+            return None
 
         if self.namespace.graph is None:
             raise Exception(f'Namespace must be attached to a graph.')
