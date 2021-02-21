@@ -8,6 +8,8 @@ from IPython import embed
 
 import pygit2
 
+VERSION = "0.0.1"
+
 
 class DataGraph(object):
     def __init__(self) -> None:
@@ -53,6 +55,12 @@ class NameSpaceWriter(object):
     def __init__(self) -> None:
         super(NameSpaceWriter, self).__init__()
 
+    def set_metadata(self, key: str, value: Any) -> None:
+        pass
+
+    def get_metadata(self, key: str) -> Any:
+        return None
+
     def node_keys(self) -> List[str]:
         return []
 
@@ -82,6 +90,17 @@ class NameSpaceGitWriter(NameSpaceWriter):
                 self.ref, author, committer, commit_message, tid, []
             )
 
+    def set_metadata(self, key: str, value: Any) -> None:
+        metada_path = Path("metadata") / key
+        self._write(metada_path, json.dumps(value))
+
+    def get_metadata(self, key: str) -> Any:
+        metada_path = Path("metadata") / key
+        value = self._read(metada_path)
+        if value is not None:
+            return json.loads(value)
+        return None
+
     def node_keys(self) -> List[str]:
         # TODO: This should be a generator.
         ret = []
@@ -96,24 +115,37 @@ class NameSpaceGitWriter(NameSpaceWriter):
 
         return ret
 
-    def read(self, node_key: str, data_key: str) -> Optional[str]:
-        ref = self.repo.references[self.ref].target
-        tree = self.repo[ref].tree
-
+    def _read(self, path: Path) -> Optional[str]:
         try:
-            ret = tree["objects"][node_key[:2]][node_key][data_key].data.decode("utf-8")
+            path_parts = path.parts
+
+            ref = self.repo.references[self.ref].target
+            tree = self.repo[ref].tree
+
+            current_node = tree
+            for ipath in path_parts:
+                current_node = current_node[ipath]
+
+            ret = current_node.data.decode("utf-8")
             if isinstance(ret, str):
                 return ret
             else:
-                raise Exception("This should be a string")
+                return None
         except:
-            # TODO: Should only catch the non existing error.
             return None
 
-    def write(self, node_key: str, data_key: str, value: str) -> None:
+    def read(self, node_key: str, data_key: str) -> Optional[str]:
         node_path = Path("objects") / node_key[:2] / node_key
         data_path = node_path / data_key
 
+        ret = self._read(data_path)
+        if isinstance(ret, str):
+            return ret
+        else:
+            return None
+            # raise Exception("This should be a string")
+
+    def _write(self, path: Path, value: str) -> None:
         ref = self.repo.references[self.ref].target
 
         tree = self.repo[ref].tree
@@ -123,7 +155,7 @@ class NameSpaceGitWriter(NameSpaceWriter):
         index.read_tree(tree)
 
         blob = self.repo.create_blob(value)
-        new_entry = pygit2.IndexEntry(str(data_path), blob, pygit2.GIT_FILEMODE_BLOB)
+        new_entry = pygit2.IndexEntry(str(path), blob, pygit2.GIT_FILEMODE_BLOB)
 
         index.add(new_entry)
 
@@ -141,6 +173,12 @@ class NameSpaceGitWriter(NameSpaceWriter):
             )
             # TODO: What to do with this oid?
 
+    def write(self, node_key: str, data_key: str, value: str) -> None:
+        node_path = Path("objects") / node_key[:2] / node_key
+        data_path = node_path / data_key
+
+        self._write(data_path, value)
+
 
 class DataNamespace(object):
     def __init__(self, graph: DataGraph, name: str, backend: "NameSpaceWriter") -> None:
@@ -153,6 +191,9 @@ class DataNamespace(object):
 
         self.graph: Optional["DataGraph"] = None
         graph.add_namepace(self)
+
+        # TODO: Read the version and check if it is compatible with the current implementation
+        self.backend.set_metadata("version", VERSION)
 
     def get_object_keys(self) -> Set[str]:
         # TODO: Use generators for this?
@@ -345,4 +386,3 @@ if __name__ == "__main__":
 
     for o in g.get_objects():
         print(o)
-    embed()
