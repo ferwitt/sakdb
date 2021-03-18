@@ -212,14 +212,37 @@ class NameSpaceGitWriter(NameSpaceWriter):
 
     def set_metadata(self, key: str, value: Any) -> None:
         metada_path = Path("metadata") / key
-        self._write(metada_path, json.dumps(value, indent=1))
 
-    def get_metadata(self, key: str) -> Optional[str]:
+        encoder = DataObjectEncoder()
+        payload_str = json.dumps(value, default=encoder.default)
+
+        data = DataObjectFields(
+            DataObjectField(key="_type", payload=type(value).__name__),
+            DataObjectField(key=key, payload=payload_str),
+        )
+
+        data_str = data_object_dumps(data)
+        self._write(metada_path, data_str)
+
+    def get_metadata(self, key: str) -> Any:
         metada_path = Path("metadata") / key
-        value = self._read(metada_path)
-        if value is not None:
-            return json.loads(value)  # type: ignore
-        return None
+
+        value_str = self._read(metada_path)
+
+        if value_str is None:
+            raise Exception(f"Failed to read data from metadata DB for key {key}")
+
+        data = data_object_loads(value_str)
+
+        if data is None:
+            raise Exception(f"Could not load the entry {key} from metadata DB")
+
+        object_field = data.get_by_key(key)
+        if object_field is None:
+            raise Exception(f"No attribute {key} for {self}.")
+
+        value = json.loads(object_field.payload)
+        return value
 
     def node_keys(self) -> List[str]:
         # TODO: This should be a generator.
@@ -254,6 +277,12 @@ class NameSpaceGitWriter(NameSpaceWriter):
         except Exception as e:
             print("Could not read path", path, str(e))
             return None
+
+    def _read_data_object(self, path: Path) -> Optional[DataObjectFields]:
+        value_str = self._read(path)
+        if value_str is None:
+            return None
+        return data_object_loads(value_str)
 
     def read(self, node_key: str, data_key: str) -> Optional[str]:
         node_path = Path("objects") / node_key[:2] / node_key
@@ -425,9 +454,6 @@ class DataObject(object):
     def _save(self) -> None:
         self.namespace.backend.write(self.key, "cl.txt", type(self).__name__)
 
-    def __getattr__structure__(self, name: str) -> Dict[str, Any]:
-        pass
-
     def __getattribute__(self, name: str) -> Any:
         if name.startswith("_") or (name in ["namespace", "key"]):
             return super().__getattribute__(name)
@@ -451,13 +477,39 @@ class DataObject(object):
         if data is None:
             raise Exception(f"Could not load the entry {name} from DB")
 
-        object_field = data.get_by_key(name)
+        type_field = data.get_by_key("_type")
+        if type_field is None:
+            raise Exception(f"Could not infere the type for {name}.")
 
-        if object_field is None:
-            raise Exception(f"No attribute {name} for {self}.")
+        if type_field.payload == "list":
+            ret_list: List[Any] = []
 
-        value = json.loads(object_field.payload, object_hook=decoder.object_hook)
-        return value
+            for field in data.fields:
+                if field.key.startswith("_"):
+                    continue
+
+                value = json.loads(field.payload, object_hook=decoder.object_hook)
+                ret_list.append(value)
+            return ret_list
+
+        elif type_field.payload == "dict":
+            ret_dict: Dict[str, Any] = {}
+
+            for field in data.fields:
+                if field.key.startswith("_"):
+                    continue
+
+                value = json.loads(field.payload, object_hook=decoder.object_hook)
+                ret_dict[field.key] = value
+            return ret_dict
+        else:
+            object_field = data.get_by_key(name)
+
+            if object_field is None:
+                raise Exception(f"No attribute {name} for {self}.")
+
+            value = json.loads(object_field.payload, object_hook=decoder.object_hook)
+            return value
 
     def __setattr__(self, name: str, value: Any) -> None:
         if name.startswith("_") or (name in ["namespace", "key"]):
@@ -472,16 +524,31 @@ class DataObject(object):
                     f"Namespace {self.namespace.name} must be attached to a graph."
                 )
 
-            encoder = DataObjectEncoder(
-                # self.namespace.graph
-            )
-            payload_str = json.dumps(value, default=encoder.default)
+            encoder = DataObjectEncoder()
 
-            data = DataObjectFields(
-                type_name=type(value).__name__,
-                fields=[DataObjectField(key=name, payload=payload_str)],
-            )
+            fields = []
 
+            if isinstance(value, list):
+                fields.append(DataObjectField(key="_type", payload="list"))
+
+                for idx, ivalue in enumerate(value):
+                    payload_str = json.dumps(ivalue, default=encoder.default)
+                    fields.append(DataObjectField(key=str(idx), payload=payload_str))
+            elif isinstance(value, dict):
+                fields.append(DataObjectField(key="_type", payload="dict"))
+
+                for ikey, ivalue in value.items():
+                    payload_str = json.dumps(ivalue, default=encoder.default)
+                    fields.append(DataObjectField(key=ikey, payload=payload_str))
+            else:
+                fields.append(
+                    DataObjectField(key="_type", payload=type(value).__name__)
+                )
+
+                payload_str = json.dumps(value, default=encoder.default)
+                fields.append(DataObjectField(key=name, payload=payload_str))
+
+            data = DataObjectFields(*fields)
             outvalue_str = data_object_dumps(data)
 
             self.namespace.backend.write(self.key, name, outvalue_str)
