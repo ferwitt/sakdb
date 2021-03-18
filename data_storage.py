@@ -1,7 +1,8 @@
+import functools
 import json
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, TypeVar
 
 import pygit2
 
@@ -14,6 +15,10 @@ from data_field import (
 )
 
 VERSION = "0.0.1"
+
+_T = TypeVar("_T")
+_KT = TypeVar("_KT")
+_VT = TypeVar("_VT")
 
 
 class DataGraph(object):
@@ -431,6 +436,71 @@ class DataObjectDecoder(object):
         return value
 
 
+class DataObjectList(list):  # type: ignore
+    def __init__(
+        self, obj: "DataObject", obj_name: str, *args: Any, **vargs: Any
+    ) -> None:
+        super(DataObjectList, self).__init__(*args, **vargs)
+        self._obj = obj
+        self._obj_name = obj_name
+
+    def __getattribute__(self, key: str) -> Any:
+        # if key == '__setitem__': import pdb; pdb.set_trace()
+        if key in [
+            "__setitem__",
+            "append",
+            "extend",
+            "insert",
+            "remove",
+            "pop",
+            "clear",
+            "sort",
+            "reverse",
+        ]:
+            func = super(DataObjectList, self).__getattribute__(key)
+
+            @functools.wraps(func)
+            def wrapper(*args: Any, **vargs: Any) -> Any:
+                ret = func(*args, **vargs)
+                setattr(self._obj, self._obj_name, self)
+                return ret
+
+            return wrapper
+        return super(DataObjectList, self).__getattribute__(key)
+
+    def __setitem__(self, key: int, item: Any) -> None:  # type: ignore
+        super(DataObjectList, self).__setitem__(key, item)
+        setattr(self._obj, self._obj_name, self)
+
+
+class DataObjectDict(Dict[_KT, _VT]):
+    def __init__(self, obj: "DataObject", obj_name: str, *args, **vargs) -> None:  # type: ignore
+        super(DataObjectDict, self).__init__(*args, **vargs)
+        self._obj = obj
+        self._obj_name = obj_name
+
+    def __getattribute__(self, key: str) -> Any:
+        if key in ["clear", "update", "pop"]:
+            func = super(DataObjectDict, self).__getattribute__(key)
+
+            @functools.wraps(func)
+            def wrapper(*args: Any, **vargs: Any) -> Any:
+                ret = func(*args, **vargs)
+                setattr(self._obj, self._obj_name, self)
+                return ret
+
+            return wrapper
+        return super(DataObjectDict, self).__getattribute__(key)
+
+    def __setitem__(self, key: _KT, item: _VT) -> None:
+        super(DataObjectDict, self).__setitem__(key, item)
+        setattr(self._obj, self._obj_name, self)
+
+    def __delitem__(self, key: _KT) -> None:
+        super(DataObjectDict, self).__delitem__(key)
+        setattr(self._obj, self._obj_name, self)
+
+
 class DataObject(object):
     namespace: DataNamespace
     key: str
@@ -482,26 +552,28 @@ class DataObject(object):
             raise Exception(f"Could not infere the type for {name}.")
 
         if type_field.payload == "list":
-            ret_list: List[Any] = []
+            # TODO(witt): This should be a list wrapper.
+            tmp_list = []
 
             for field in data.fields:
                 if field.key.startswith("_"):
                     continue
 
                 value = json.loads(field.payload, object_hook=decoder.object_hook)
-                ret_list.append(value)
-            return ret_list
+                tmp_list.append(value)
+
+            return DataObjectList(self, name, tmp_list)
 
         elif type_field.payload == "dict":
-            ret_dict: Dict[str, Any] = {}
+            tmp_dict: Dict[str, Any] = {}
 
             for field in data.fields:
                 if field.key.startswith("_"):
                     continue
 
                 value = json.loads(field.payload, object_hook=decoder.object_hook)
-                ret_dict[field.key] = value
-            return ret_dict
+                tmp_dict[field.key] = value
+            return DataObjectDict(self, name, tmp_dict)
         else:
             object_field = data.get_by_key(name)
 

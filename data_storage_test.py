@@ -194,9 +194,7 @@ def test_wrwite_a_read_b_list():
         assert len(b.my_list) == 4
 
 
-def DISABLED_test_list_append():
-    # TODO(witt): Append is not working for lists.
-
+def test_list_editions():
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
         g_a = DataGraph()
@@ -221,6 +219,30 @@ def DISABLED_test_list_append():
         assert a.my_list[3] == 5
         assert a.my_list[4] == 42
         assert len(a.my_list) == 5
+
+        # When.
+        a.my_list += [100]
+
+        # Then.
+        assert a.my_list[0] == 2
+        assert a.my_list[1] == 3
+        assert a.my_list[2] == 1
+        assert a.my_list[3] == 5
+        assert a.my_list[4] == 42
+        assert a.my_list[5] == 100
+        assert len(a.my_list) == 6
+
+        # When.
+        a.my_list[5] = 101
+
+        # Then.
+        assert a.my_list[0] == 2
+        assert a.my_list[1] == 3
+        assert a.my_list[2] == 1
+        assert a.my_list[3] == 5
+        assert a.my_list[4] == 42
+        assert a.my_list[5] == 101
+        assert len(a.my_list) == 6
 
 
 def test_write_a_read_b_dict():
@@ -251,9 +273,48 @@ def test_write_a_read_b_dict():
         assert len(b.my_dict) == 2
 
 
-def DISABLED_test_list_pop_middle():
-    # TODO(witt): The returned list will not trigger a change in the DB for appends nor for pop
+def test_dict_edit():
+    # Given.
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        g_a = DataGraph()
+        nw_a = NameSpaceGitWriter(Path(tmpdirname), "refs/heads/master")
+        n_a = DataNamespace(g_a, "data", nw_a)
+        g_a.register_class(DBObjectDict)
 
+        a = DBObjectDict(n_a, my_dict={"foo": 1, "bar": "hey"})
+        assert a.my_dict["foo"] == 1
+        assert a.my_dict["bar"] == "hey"
+        assert len(a.my_dict) == 2
+
+        # When.
+        a.my_dict["hello"] = "world"
+
+        # Then.
+        assert a.my_dict["foo"] == 1
+        assert a.my_dict["bar"] == "hey"
+        assert a.my_dict["hello"] == "world"
+        assert len(a.my_dict) == 3
+
+        # When.
+        a.my_dict.pop("foo")
+
+        # Then.
+        assert a.my_dict["bar"] == "hey"
+        assert a.my_dict["hello"] == "world"
+        assert len(a.my_dict) == 2
+
+        # When.
+        a.my_dict.update({"one_float": 1.23, "one_bool": True})
+
+        # Then.
+        assert a.my_dict["one_float"] == 1.23
+        assert a.my_dict["one_bool"] == True
+        assert a.my_dict["bar"] == "hey"
+        assert a.my_dict["hello"] == "world"
+        assert len(a.my_dict) == 4
+
+
+def test_list_pop_middle():
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
         g_a = DataGraph()
