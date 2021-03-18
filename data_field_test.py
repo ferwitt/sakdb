@@ -80,5 +80,3 @@ def test_merge_no_common_base():
     merged = merge(None, ours, theirs)
 
     assert len(merged.fields) == 1
-
-    assert 0
