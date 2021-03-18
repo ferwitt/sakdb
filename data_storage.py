@@ -86,12 +86,6 @@ class NameSpaceGitWriter(NameSpaceWriter):
         super(NameSpaceGitWriter, self).__init__()
 
         self.repo = pygit2.init_repository(path, True)
-
-        # try:
-        #    self.repo = pygit2.Repository(path)
-        # except pygit2.GitError as e:
-        #    print(repr(e))
-        #    raise(e)
         self.ref = ref
 
         if self.ref not in self.repo.references:
@@ -369,18 +363,14 @@ class DataNamespace(object):
             graph.add_namepace(self)
 
     def get_object(self, key: str) -> "DataObject":
-        # TODO: Check if there is already this key in the graph, then return it
-        # TODO: Otherwise create this object in the Namespace and return it
-
+        # Check if there is already this key in the graph, then return it.
+        # Otherwise create this object in the Namespace and return it.
         if key in self.objects:
             return self.objects[key]
 
         # TODO: How do I properly choose the class. The idea is to have a field informing the class
         # of this object, then I instantiate this specific class.
-
-        clname = None
         clname = self.backend.read(key, "cl.txt")
-
         if clname is None:
             raise Exception(f"Failed to read the class type for object {key}")
 
@@ -417,8 +407,6 @@ class DataObjectEncoder(json.JSONEncoder):
 
     def default(self, value: Any) -> Any:
         if isinstance(value, DataObject):
-            # TODO(witt): Add some more metadata here? If I add the clock, I can use this to solve
-            # merge conflicts.
             return {"_type": "DataObject", "key": value.key}
         else:
             return super(DataObjectEncoder, self).default(value)
@@ -445,7 +433,6 @@ class DataObjectList(list):  # type: ignore
         self._obj_name = obj_name
 
     def __getattribute__(self, key: str) -> Any:
-        # if key == '__setitem__': import pdb; pdb.set_trace()
         if key in [
             "__setitem__",
             "append",
@@ -531,9 +518,7 @@ class DataObject(object):
         value_str = self.namespace.backend.read(self.key, name)
 
         if value_str is None:
-            # TODO: Should this thing here fail?
-            # raise Exception(f'Failed to get value for {name}.')
-            return None
+            raise Exception(f"{self} has no attribute {name}.")
 
         if self.namespace.graph is None:
             raise Exception(
@@ -552,7 +537,7 @@ class DataObject(object):
             raise Exception(f"Could not infere the type for {name}.")
 
         if type_field.payload == "list":
-            # TODO(witt): This should be a list wrapper.
+            # If the type is a list.
             tmp_list = []
 
             for field in data.fields:
@@ -565,6 +550,7 @@ class DataObject(object):
             return DataObjectList(self, name, tmp_list)
 
         elif type_field.payload == "dict":
+            # If the type is a dictionary.
             tmp_dict: Dict[str, Any] = {}
 
             for field in data.fields:
@@ -574,7 +560,9 @@ class DataObject(object):
                 value = json.loads(field.payload, object_hook=decoder.object_hook)
                 tmp_dict[field.key] = value
             return DataObjectDict(self, name, tmp_dict)
+
         else:
+            # For all other types.
             object_field = data.get_by_key(name)
 
             if object_field is None:
@@ -632,37 +620,3 @@ class DataObject(object):
 
     def __str__(self) -> str:
         return f"<{type(self).__name__} key: {self.key}>"
-
-
-class DataObject2(DataObject):
-    name: str
-    otherobj: DataObject
-    foobar: List[int]
-    hey: List[DataObject]
-
-    def __str__(self) -> str:
-        return f"<{type(self).__name__} key: {self.key} name: {repr(self.name)}>"
-
-
-if __name__ == "__main__":
-    g = DataGraph()
-
-    nw = NameSpaceGitWriter(Path("data"), "refs/heads/master")
-
-    n = DataNamespace(g, "data", nw)
-
-    g.register_class(DataObject)
-    g.register_class(DataObject2)
-
-    a = DataObject(n, "1af852330e2c4e419c77923faf00f38c")
-
-    b = DataObject2(n, key="60b20f9340894410b18133b53823a3f5")
-    b.name = "Foo"
-    b.hello = "world"
-    b.otherobj = a
-
-    b.hey = [a, a, b]
-    b.foobar = [1]
-
-    for o in g.get_objects():
-        print(o)
