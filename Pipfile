@@ -13,6 +13,8 @@ black = "*"
 flake8 = "*"
 darglint = "*"
 pytest = "*"
+isort = "*"
+autoflake = "*"
 
 [requires]
 python_version = "3.8"
