@@ -1,19 +1,17 @@
-from IPython import embed
-
-from data_field import (
+from sakdb.sakdb_fields import (
     PAYLOAD_SEPARATOR,
-    DataObjectField,
-    DataObjectFields,
-    data_object_dumps,
-    data_object_loads,
+    SakDbField,
+    SakDbFields,
     merge,
+    sakdb_dumps,
+    sakdb_loads,
 )
 
 
-def test_dumps():
+def test_dumps() -> None:
     # Given.
-    data = DataObjectFields(
-        DataObjectField(
+    data = SakDbFields(
+        SakDbField(
             ts=1.0,
             key="0000000000000000000000000000000000000000",
             payload="Hello world",
@@ -21,7 +19,7 @@ def test_dumps():
     )
 
     # When.
-    data_str = data_object_dumps(data)
+    data_str = sakdb_dumps(data)
 
     # Then.
     assert data_str == (
@@ -32,29 +30,30 @@ def test_dumps():
     )
 
 
-def test_loads():
+def test_loads() -> None:
     # Given.
-    data = DataObjectFields(
-        DataObjectField(
+    data = SakDbFields(
+        SakDbField(
             ts=1.0,
             key="0000000000000000000000000000000000000000",
             crc="1111111111111111111111111111111111111111",
             payload="Hello world",
         )
     )
-    data_str = data_object_dumps(data)
+    data_str = sakdb_dumps(data)
 
     # When.
-    obj = data_object_loads(data_str)
+    obj = sakdb_loads(data_str)
 
     # Then.
+    assert obj is not None
     assert len(obj.fields) == 1
     assert obj.fields[0].key == "0000000000000000000000000000000000000000"
     assert obj.fields[0].crc == "1111111111111111111111111111111111111111"
     assert obj.fields[0].payload == "Hello world"
 
 
-def test_merge_no_common_base():
+def test_merge_no_common_base() -> None:
 
     ours_data = (
         '{"t": 1616074500.117626, "k": "name",'
@@ -65,8 +64,8 @@ def test_merge_no_common_base():
         ' "c": "md5:8dd9a71fdf86e9f8551294356894b569"} || "\\"fooBar\\""'
     )
 
-    ours = data_object_loads(ours_data)
-    theirs = data_object_loads(theirs_data)
+    ours = sakdb_loads(ours_data)
+    theirs = sakdb_loads(theirs_data)
 
     merged = merge(None, ours, theirs)
 

@@ -3,75 +3,73 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List
 
-from IPython import embed
-
-from data_storage import (
+from sakdb.sakdb_storage import (
     VERSION,
-    DataGraph,
-    DataNamespace,
-    DataObject,
-    NameSpaceGitWriter,
+    SakDb,
+    SakDbGraph,
+    SakDbNamespace,
+    SakDbNamespaceGit,
 )
 
 
-class DBObjectInt(DataObject):
+class DBObjectInt(SakDb):
     my_int: int
 
 
-class DBObjectString(DataObject):
+class DBObjectString(SakDb):
     my_string: str
 
 
-class DBObjectDict(DataObject):
+class DBObjectDict(SakDb):
     my_dict: Dict[str, Any]
 
 
-class DBObjectList(DataObject):
-    my_list: List[str]
+class DBObjectList(SakDb):
+    my_list: List[int]
 
 
-def run(cmd, cwd):
+def run(cmd: List[str], cwd: str) -> None:
     subprocess.run(cmd, check=True, cwd=cwd)
 
 
-def run_getoutput(cmd, cwd):
+def run_getoutput(cmd: List[str], cwd: str) -> str:
     p = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, cwd=cwd)
     return p.stdout.strip().decode("utf-8")
 
 
-def test_create_repository():
+def test_create_repository() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
 
         # When.
-        g = DataGraph()
-        nw = NameSpaceGitWriter(Path(tmpdirname), "refs/heads/master")
-        DataNamespace(g, "data", nw)
+        g = SakDbGraph()
+        nw = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
+        SakDbNamespace(g, "data", nw)
 
         # Then.
-        assert nw.repo.is_bare == True
+        assert nw.repo.is_bare is True
 
 
-def test_already_created_repository():
+def test_already_created_repository() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
         subprocess.run(["git", "init", tmpdirname], check=True)
 
         # When.
-        g = DataGraph()
-        nw = NameSpaceGitWriter(Path(tmpdirname), "refs/heads/master")
-        DataNamespace(g, "data", nw)
+        g = SakDbGraph()
+        nw = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
+        SakDbNamespace(g, "data", nw)
 
         # Then.
-        assert nw.repo.is_bare == False
+        assert nw.repo.is_bare is False
 
 
-def test_repository_version():
+def test_repository_version() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
-        g = DataGraph()
-        nw = NameSpaceGitWriter(Path(tmpdirname), "refs/heads/master")
-        n = DataNamespace(g, "data", nw)
+        g = SakDbGraph()
+        nw = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
+        n = SakDbNamespace(g, "data", nw)
 
         # When.
         version = n.get_version()
@@ -80,12 +78,12 @@ def test_repository_version():
         assert version == VERSION
 
 
-def test_int_increment():
+def test_int_increment() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
-        g_a = DataGraph()
-        nw_a = NameSpaceGitWriter(Path(tmpdirname), "refs/heads/master")
-        n_a = DataNamespace(g_a, "data", nw_a)
+        g_a = SakDbGraph()
+        nw_a = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
+        n_a = SakDbNamespace(g_a, "data", nw_a)
         g_a.register_class(DBObjectInt)
 
         a = DBObjectInt(n_a, my_int=42)
@@ -98,20 +96,20 @@ def test_int_increment():
         assert a.my_int == 43
 
 
-def test_write_a_read_b_int():
+def test_write_a_read_b_int() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
-        g_a = DataGraph()
-        nw_a = NameSpaceGitWriter(Path(tmpdirname), "refs/heads/master")
-        n_a = DataNamespace(g_a, "data", nw_a)
+        g_a = SakDbGraph()
+        nw_a = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
+        n_a = SakDbNamespace(g_a, "data", nw_a)
         g_a.register_class(DBObjectInt)
 
         a = DBObjectInt(n_a, my_int=42)
 
         # When.
-        g_b = DataGraph()
-        nw_b = NameSpaceGitWriter(Path(tmpdirname), "refs/heads/master")
-        n_b = DataNamespace(g_b, "data", nw_b)
+        g_b = SakDbGraph()
+        nw_b = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
+        n_b = SakDbNamespace(g_b, "data", nw_b)
         g_b.register_class(DBObjectInt)
 
         b = DBObjectInt(n_b, a.key)
@@ -121,20 +119,20 @@ def test_write_a_read_b_int():
         assert b.my_int == 42
 
 
-def test_write_a_read_b_string():
+def test_write_a_read_b_string() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
-        g_a = DataGraph()
-        nw_a = NameSpaceGitWriter(Path(tmpdirname), "refs/heads/master")
-        n_a = DataNamespace(g_a, "data", nw_a)
+        g_a = SakDbGraph()
+        nw_a = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
+        n_a = SakDbNamespace(g_a, "data", nw_a)
         g_a.register_class(DBObjectString)
 
         a = DBObjectString(n_a, my_string="helloWorld")
 
         # When.
-        g_b = DataGraph()
-        nw_b = NameSpaceGitWriter(Path(tmpdirname), "refs/heads/master")
-        n_b = DataNamespace(g_b, "data", nw_b)
+        g_b = SakDbGraph()
+        nw_b = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
+        n_b = SakDbNamespace(g_b, "data", nw_b)
         g_b.register_class(DBObjectString)
 
         b = DBObjectString(n_b, a.key)
@@ -144,12 +142,12 @@ def test_write_a_read_b_string():
         assert b.my_string == "helloWorld"
 
 
-def test_string_append():
+def test_string_append() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
-        g_a = DataGraph()
-        nw_a = NameSpaceGitWriter(Path(tmpdirname), "refs/heads/master")
-        n_a = DataNamespace(g_a, "data", nw_a)
+        g_a = SakDbGraph()
+        nw_a = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
+        n_a = SakDbNamespace(g_a, "data", nw_a)
         g_a.register_class(DBObjectString)
 
         a = DBObjectString(n_a, my_string="helloWorld")
@@ -162,20 +160,20 @@ def test_string_append():
         assert a.my_string == "helloWorld!"
 
 
-def test_wrwite_a_read_b_list():
+def test_wrwite_a_read_b_list() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
-        g_a = DataGraph()
-        nw_a = NameSpaceGitWriter(Path(tmpdirname), "refs/heads/master")
-        n_a = DataNamespace(g_a, "data", nw_a)
+        g_a = SakDbGraph()
+        nw_a = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
+        n_a = SakDbNamespace(g_a, "data", nw_a)
         g_a.register_class(DBObjectList)
 
         a = DBObjectList(n_a, my_list=[2, 3, 1, 5])
 
         # When.
-        g_b = DataGraph()
-        nw_b = NameSpaceGitWriter(Path(tmpdirname), "refs/heads/master")
-        n_b = DataNamespace(g_b, "data", nw_b)
+        g_b = SakDbGraph()
+        nw_b = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
+        n_b = SakDbNamespace(g_b, "data", nw_b)
         g_b.register_class(DBObjectList)
 
         b = DBObjectList(n_b, a.key)
@@ -194,12 +192,12 @@ def test_wrwite_a_read_b_list():
         assert len(b.my_list) == 4
 
 
-def test_list_editions():
+def test_list_editions() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
-        g_a = DataGraph()
-        nw_a = NameSpaceGitWriter(Path(tmpdirname), "refs/heads/master")
-        n_a = DataNamespace(g_a, "data", nw_a)
+        g_a = SakDbGraph()
+        nw_a = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
+        n_a = SakDbNamespace(g_a, "data", nw_a)
         g_a.register_class(DBObjectList)
 
         a = DBObjectList(n_a, my_list=[2, 3, 1, 5])
@@ -245,20 +243,20 @@ def test_list_editions():
         assert len(a.my_list) == 6
 
 
-def test_write_a_read_b_dict():
+def test_write_a_read_b_dict() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
-        g_a = DataGraph()
-        nw_a = NameSpaceGitWriter(Path(tmpdirname), "refs/heads/master")
-        n_a = DataNamespace(g_a, "data", nw_a)
+        g_a = SakDbGraph()
+        nw_a = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
+        n_a = SakDbNamespace(g_a, "data", nw_a)
         g_a.register_class(DBObjectDict)
 
         a = DBObjectDict(n_a, my_dict={"foo": 1, "bar": "hey"})
 
         # When.
-        g_b = DataGraph()
-        nw_b = NameSpaceGitWriter(Path(tmpdirname), "refs/heads/master")
-        n_b = DataNamespace(g_b, "data", nw_b)
+        g_b = SakDbGraph()
+        nw_b = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
+        n_b = SakDbNamespace(g_b, "data", nw_b)
         g_b.register_class(DBObjectDict)
 
         b = DBObjectDict(n_b, a.key)
@@ -273,12 +271,12 @@ def test_write_a_read_b_dict():
         assert len(b.my_dict) == 2
 
 
-def test_dict_edit():
+def test_dict_edit() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
-        g_a = DataGraph()
-        nw_a = NameSpaceGitWriter(Path(tmpdirname), "refs/heads/master")
-        n_a = DataNamespace(g_a, "data", nw_a)
+        g_a = SakDbGraph()
+        nw_a = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
+        n_a = SakDbNamespace(g_a, "data", nw_a)
         g_a.register_class(DBObjectDict)
 
         a = DBObjectDict(n_a, my_dict={"foo": 1, "bar": "hey"})
@@ -308,18 +306,18 @@ def test_dict_edit():
 
         # Then.
         assert a.my_dict["one_float"] == 1.23
-        assert a.my_dict["one_bool"] == True
+        assert a.my_dict["one_bool"] is True
         assert a.my_dict["bar"] == "hey"
         assert a.my_dict["hello"] == "world"
         assert len(a.my_dict) == 4
 
 
-def test_list_pop_middle():
+def test_list_pop_middle() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
-        g_a = DataGraph()
-        nw_a = NameSpaceGitWriter(Path(tmpdirname), "refs/heads/master")
-        n_a = DataNamespace(g_a, "data", nw_a)
+        g_a = SakDbGraph()
+        nw_a = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
+        n_a = SakDbNamespace(g_a, "data", nw_a)
         g_a.register_class(DBObjectList)
 
         a = DBObjectList(n_a, my_list=[2, 3, 1, 5])
@@ -341,9 +339,9 @@ def test_list_pop_middle():
         assert len(a.my_list) == 3
 
         # When.
-        g_b = DataGraph()
-        nw_b = NameSpaceGitWriter(Path(tmpdirname), "refs/heads/master")
-        n_b = DataNamespace(g_b, "data", nw_b)
+        g_b = SakDbGraph()
+        nw_b = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
+        n_b = SakDbNamespace(g_b, "data", nw_b)
         g_b.register_class(DBObjectList)
 
         b = DBObjectList(n_b, a.key)
@@ -355,7 +353,7 @@ def test_list_pop_middle():
         assert len(b.my_list) == 3
 
 
-def test_sync_string():
+def test_sync_string() -> None:
     with tempfile.TemporaryDirectory() as tmpdirname:
         # Given.
         dirA = Path(tmpdirname) / "dirA"
@@ -364,16 +362,16 @@ def test_sync_string():
         dirA.mkdir()
         dirB.mkdir()
 
-        g_a = DataGraph()
-        nw_a = NameSpaceGitWriter(Path(dirA), "refs/heads/master")
-        n_a = DataNamespace(g_a, "data", nw_a)
+        g_a = SakDbGraph()
+        nw_a = SakDbNamespaceGit(Path(dirA), "refs/heads/master")
+        n_a = SakDbNamespace(g_a, "data", nw_a)
         g_a.register_class(DBObjectString)
 
         a = DBObjectString(n_a, my_string="helloWorld")
 
-        g_b = DataGraph()
-        nw_b = NameSpaceGitWriter(Path(dirB), "refs/heads/master")
-        n_b = DataNamespace(g_b, "data", nw_b)
+        g_b = SakDbGraph()
+        nw_b = SakDbNamespaceGit(Path(dirB), "refs/heads/master")
+        n_b = SakDbNamespace(g_b, "data", nw_b)
         g_b.register_class(DBObjectString)
 
         # When
@@ -390,7 +388,7 @@ def test_sync_string():
         assert b.my_string == "helloWorld"
 
 
-def test_sync_list():
+def test_sync_list() -> None:
     with tempfile.TemporaryDirectory() as tmpdirname:
         # Given.
         dirA = Path(tmpdirname) / "dirA"
@@ -399,16 +397,16 @@ def test_sync_list():
         dirA.mkdir()
         dirB.mkdir()
 
-        g_a = DataGraph()
-        nw_a = NameSpaceGitWriter(Path(dirA), "refs/heads/master")
-        n_a = DataNamespace(g_a, "data", nw_a)
+        g_a = SakDbGraph()
+        nw_a = SakDbNamespaceGit(Path(dirA), "refs/heads/master")
+        n_a = SakDbNamespace(g_a, "data", nw_a)
         g_a.register_class(DBObjectList)
 
         a = DBObjectList(n_a, my_list=[2, 1, 3])
 
-        g_b = DataGraph()
-        nw_b = NameSpaceGitWriter(Path(dirB), "refs/heads/master")
-        n_b = DataNamespace(g_b, "data", nw_b)
+        g_b = SakDbGraph()
+        nw_b = SakDbNamespaceGit(Path(dirB), "refs/heads/master")
+        n_b = SakDbNamespace(g_b, "data", nw_b)
         g_b.register_class(DBObjectList)
 
         # When
@@ -430,7 +428,7 @@ def test_sync_list():
         assert b.my_list[2] == 3
 
 
-def test_sync_dict():
+def test_sync_dict() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
         # Given.
@@ -440,16 +438,16 @@ def test_sync_dict():
         dirA.mkdir()
         dirB.mkdir()
 
-        g_a = DataGraph()
-        nw_a = NameSpaceGitWriter(Path(dirA), "refs/heads/master")
-        n_a = DataNamespace(g_a, "data", nw_a)
+        g_a = SakDbGraph()
+        nw_a = SakDbNamespaceGit(Path(dirA), "refs/heads/master")
+        n_a = SakDbNamespace(g_a, "data", nw_a)
         g_a.register_class(DBObjectDict)
 
         a = DBObjectDict(n_a, my_dict={"foo": 1, "bar": "hey"})
 
-        g_b = DataGraph()
-        nw_b = NameSpaceGitWriter(Path(dirB), "refs/heads/master")
-        n_b = DataNamespace(g_b, "data", nw_b)
+        g_b = SakDbGraph()
+        nw_b = SakDbNamespaceGit(Path(dirB), "refs/heads/master")
+        n_b = SakDbNamespace(g_b, "data", nw_b)
         g_b.register_class(DBObjectDict)
 
         # When
@@ -471,7 +469,7 @@ def test_sync_dict():
         assert len(b.my_dict) == 2
 
 
-def test_sync_with_git_command_no_common_base():
+def test_sync_with_git_command_no_common_base() -> None:
     with tempfile.TemporaryDirectory() as tmpdirname:
         # Given.
         dirA = Path(tmpdirname) / "dirA"
@@ -481,18 +479,18 @@ def test_sync_with_git_command_no_common_base():
         dirB.mkdir()
 
         # Add object in first repo with my_string "helloWorld"
-        g_a = DataGraph()
-        nw_a = NameSpaceGitWriter(Path(dirA), "refs/heads/master")
-        n_a = DataNamespace(g_a, "data", nw_a)
+        g_a = SakDbGraph()
+        nw_a = SakDbNamespaceGit(Path(dirA), "refs/heads/master")
+        n_a = SakDbNamespace(g_a, "data", nw_a)
         g_a.register_class(DBObjectString)
 
         a = DBObjectString(n_a, my_string="helloWorld")
         assert a.my_string == "helloWorld"
 
         # Add the same object/key in another object with my_string "fooBar".
-        g_b = DataGraph()
-        nw_b = NameSpaceGitWriter(Path(dirB), "refs/heads/master")
-        n_b = DataNamespace(g_b, "data", nw_b)
+        g_b = SakDbGraph()
+        nw_b = SakDbNamespaceGit(Path(dirB), "refs/heads/master")
+        n_b = SakDbNamespace(g_b, "data", nw_b)
         g_b.register_class(DBObjectString)
 
         b = DBObjectString(n_b, a.key, my_string="fooBar")
@@ -514,7 +512,7 @@ def test_sync_with_git_command_no_common_base():
         assert b.my_string == "fooBar"
 
 
-def test_sync_list_with_git_command_no_common_base():
+def test_sync_list_with_git_command_no_common_base() -> None:
     with tempfile.TemporaryDirectory() as tmpdirname:
         # Given.
         dirA = Path(tmpdirname) / "dirA"
@@ -524,9 +522,9 @@ def test_sync_list_with_git_command_no_common_base():
         dirB.mkdir()
 
         # Add object in first repo with my_list "helloWorld"
-        g_a = DataGraph()
-        nw_a = NameSpaceGitWriter(Path(dirA), "refs/heads/master")
-        n_a = DataNamespace(g_a, "data", nw_a)
+        g_a = SakDbGraph()
+        nw_a = SakDbNamespaceGit(Path(dirA), "refs/heads/master")
+        n_a = SakDbNamespace(g_a, "data", nw_a)
         g_a.register_class(DBObjectList)
 
         a = DBObjectList(n_a, my_list=[2, 1, 3])
@@ -536,9 +534,9 @@ def test_sync_list_with_git_command_no_common_base():
         assert len(a.my_list) == 3
 
         # Add the same object/key in another object with my_list "fooBar".
-        g_b = DataGraph()
-        nw_b = NameSpaceGitWriter(Path(dirB), "refs/heads/master")
-        n_b = DataNamespace(g_b, "data", nw_b)
+        g_b = SakDbGraph()
+        nw_b = SakDbNamespaceGit(Path(dirB), "refs/heads/master")
+        n_b = SakDbNamespace(g_b, "data", nw_b)
         g_b.register_class(DBObjectList)
 
         b = DBObjectList(n_b, a.key, my_list=[5, 4, 6, 10])
@@ -574,7 +572,7 @@ def test_sync_list_with_git_command_no_common_base():
         assert len(b.my_list) == 4
 
 
-def test_sync_dict_with_git_command_no_common_base():
+def test_sync_dict_with_git_command_no_common_base() -> None:
     with tempfile.TemporaryDirectory() as tmpdirname:
         # Given.
         dirA = Path(tmpdirname) / "dirA"
@@ -584,9 +582,9 @@ def test_sync_dict_with_git_command_no_common_base():
         dirB.mkdir()
 
         # Add object in first repo with my_dict "helloWorld"
-        g_a = DataGraph()
-        nw_a = NameSpaceGitWriter(Path(dirA), "refs/heads/master")
-        n_a = DataNamespace(g_a, "data", nw_a)
+        g_a = SakDbGraph()
+        nw_a = SakDbNamespaceGit(Path(dirA), "refs/heads/master")
+        n_a = SakDbNamespace(g_a, "data", nw_a)
         g_a.register_class(DBObjectDict)
 
         a = DBObjectDict(n_a, my_dict={"foo": 1, "bar": "hey"})
@@ -595,9 +593,9 @@ def test_sync_dict_with_git_command_no_common_base():
         assert len(a.my_dict) == 2
 
         # Add the same object/key in another object with my_dict "fooBar".
-        g_b = DataGraph()
-        nw_b = NameSpaceGitWriter(Path(dirB), "refs/heads/master")
-        n_b = DataNamespace(g_b, "data", nw_b)
+        g_b = SakDbGraph()
+        nw_b = SakDbNamespaceGit(Path(dirB), "refs/heads/master")
+        n_b = SakDbNamespace(g_b, "data", nw_b)
         g_b.register_class(DBObjectDict)
 
         b = DBObjectDict(n_b, a.key, my_dict={"foo": 2, "hello": "world"})
@@ -629,7 +627,7 @@ def test_sync_dict_with_git_command_no_common_base():
         assert len(b.my_dict) == 3
 
 
-def test_sync_with_git_command_common_base():
+def test_sync_with_git_command_common_base() -> None:
     with tempfile.TemporaryDirectory() as tmpdirname:
         # Given.
         dirA = Path(tmpdirname) / "dirA"
@@ -639,18 +637,18 @@ def test_sync_with_git_command_common_base():
         dirB.mkdir()
 
         # Add object in first repo with my_string "helloWorld"
-        g_a = DataGraph()
-        nw_a = NameSpaceGitWriter(Path(dirA), "refs/heads/master")
-        n_a = DataNamespace(g_a, "data", nw_a)
+        g_a = SakDbGraph()
+        nw_a = SakDbNamespaceGit(Path(dirA), "refs/heads/master")
+        n_a = SakDbNamespace(g_a, "data", nw_a)
         g_a.register_class(DBObjectString)
 
         a = DBObjectString(n_a, my_string="helloWorld")
         assert a.my_string == "helloWorld"
 
         # Add the same object/key in another object with my_string "fooBar".
-        g_b = DataGraph()
-        nw_b = NameSpaceGitWriter(Path(dirB), "refs/heads/master")
-        n_b = DataNamespace(g_b, "data", nw_b)
+        g_b = SakDbGraph()
+        nw_b = SakDbNamespaceGit(Path(dirB), "refs/heads/master")
+        n_b = SakDbNamespace(g_b, "data", nw_b)
         g_b.register_class(DBObjectString)
 
         # Link the repositories with remotes.
@@ -679,7 +677,7 @@ def test_sync_with_git_command_common_base():
         assert b.my_string == "changedB"
 
 
-def test_sync_list_with_git_command_no_common_base():
+def test_sync_list_with_git_command_common_base() -> None:
     with tempfile.TemporaryDirectory() as tmpdirname:
         # Given.
         dirA = Path(tmpdirname) / "dirA"
@@ -689,9 +687,9 @@ def test_sync_list_with_git_command_no_common_base():
         dirB.mkdir()
 
         # Add object in first repo with my_list "helloWorld"
-        g_a = DataGraph()
-        nw_a = NameSpaceGitWriter(Path(dirA), "refs/heads/master")
-        n_a = DataNamespace(g_a, "data", nw_a)
+        g_a = SakDbGraph()
+        nw_a = SakDbNamespaceGit(Path(dirA), "refs/heads/master")
+        n_a = SakDbNamespace(g_a, "data", nw_a)
         g_a.register_class(DBObjectString)
 
         a = DBObjectString(n_a, my_list=[2, 1, 3])
@@ -701,9 +699,9 @@ def test_sync_list_with_git_command_no_common_base():
         assert len(a.my_list) == 3
 
         # Add the same object/key in another object with my_list "fooBar".
-        g_b = DataGraph()
-        nw_b = NameSpaceGitWriter(Path(dirB), "refs/heads/master")
-        n_b = DataNamespace(g_b, "data", nw_b)
+        g_b = SakDbGraph()
+        nw_b = SakDbNamespaceGit(Path(dirB), "refs/heads/master")
+        n_b = SakDbNamespace(g_b, "data", nw_b)
         g_b.register_class(DBObjectString)
 
         # When - Link the repositories with remotes.
@@ -779,7 +777,7 @@ def test_sync_list_with_git_command_no_common_base():
         assert len(b.my_list) == 3
 
 
-def test_sync_dict_with_git_command_no_common_base():
+def test_sync_dict_with_git_command_common_base() -> None:
     with tempfile.TemporaryDirectory() as tmpdirname:
         # Given.
         dirA = Path(tmpdirname) / "dirA"
@@ -789,9 +787,9 @@ def test_sync_dict_with_git_command_no_common_base():
         dirB.mkdir()
 
         # Add object in first repo with my_dict "helloWorld"
-        g_a = DataGraph()
-        nw_a = NameSpaceGitWriter(Path(dirA), "refs/heads/master")
-        n_a = DataNamespace(g_a, "data", nw_a)
+        g_a = SakDbGraph()
+        nw_a = SakDbNamespaceGit(Path(dirA), "refs/heads/master")
+        n_a = SakDbNamespace(g_a, "data", nw_a)
         g_a.register_class(DBObjectDict)
 
         a = DBObjectDict(n_a, my_dict={"foo": 1, "bar": "hey"})
@@ -800,9 +798,9 @@ def test_sync_dict_with_git_command_no_common_base():
         assert len(a.my_dict) == 2
 
         # Add the same object/key in another object with my_dict "fooBar".
-        g_b = DataGraph()
-        nw_b = NameSpaceGitWriter(Path(dirB), "refs/heads/master")
-        n_b = DataNamespace(g_b, "data", nw_b)
+        g_b = SakDbGraph()
+        nw_b = SakDbNamespaceGit(Path(dirB), "refs/heads/master")
+        n_b = SakDbNamespace(g_b, "data", nw_b)
         g_b.register_class(DBObjectDict)
 
         b = DBObjectDict(n_b, a.key)

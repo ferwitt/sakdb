@@ -6,13 +6,7 @@ from typing import Any, Dict, List, Optional, Set, TypeVar
 
 import pygit2
 
-from data_field import (
-    DataObjectField,
-    DataObjectFields,
-    data_object_dumps,
-    data_object_loads,
-    merge,
-)
+from sakdb.sakdb_fields import SakDbField, SakDbFields, merge, sakdb_dumps, sakdb_loads
 
 VERSION = "0.0.1"
 
@@ -21,17 +15,17 @@ _KT = TypeVar("_KT")
 _VT = TypeVar("_VT")
 
 
-class DataGraph(object):
+class SakDbGraph(object):
     def __init__(self) -> None:
-        super(DataGraph, self).__init__()
+        super(SakDbGraph, self).__init__()
 
-        self.namespaces: Dict[str, "DataNamespace"] = {}
+        self.namespaces: Dict[str, "SakDbNamespace"] = {}
         self.classes: Dict[str, type] = {}
 
     def has_namespace_registered(self, name: str) -> bool:
         return name in self.namespaces
 
-    def add_namepace(self, namespace: "DataNamespace") -> None:
+    def add_namepace(self, namespace: "SakDbNamespace") -> None:
         if not self.has_namespace_registered(namespace.name):
             self.namespaces[namespace.name] = namespace
         namespace.set_graph(self)
@@ -40,7 +34,7 @@ class DataGraph(object):
         for n in self.namespaces.values():
             n.save()
 
-    def get_object(self, key: str) -> Optional["DataObject"]:
+    def get_object(self, key: str) -> Optional["SakDb"]:
         for n in self.namespaces.values():
             if n.has_object(key):
                 return n.get_object(key)
@@ -54,16 +48,16 @@ class DataGraph(object):
     def get_class(self, clname: str) -> type:
         return self.classes[clname]
 
-    def get_objects(self) -> List["DataObject"]:
+    def get_objects(self) -> List["SakDb"]:
         ret = []
         for n in self.namespaces.values():
             ret += list(n.get_objects())
         return ret
 
 
-class NameSpaceWriter(object):
+class SakDbNamespaceBackend(object):
     def __init__(self) -> None:
-        super(NameSpaceWriter, self).__init__()
+        super(SakDbNamespaceBackend, self).__init__()
 
     def set_metadata(self, key: str, value: Any) -> None:
         pass
@@ -81,9 +75,9 @@ class NameSpaceWriter(object):
         pass
 
 
-class NameSpaceGitWriter(NameSpaceWriter):
+class SakDbNamespaceGit(SakDbNamespaceBackend):
     def __init__(self, path: Path, ref: str = "refs/heads/master") -> None:
-        super(NameSpaceGitWriter, self).__init__()
+        super(SakDbNamespaceGit, self).__init__()
 
         self.repo = pygit2.init_repository(path, True)
         self.ref = ref
@@ -144,19 +138,19 @@ class NameSpaceGitWriter(NameSpaceWriter):
 
                         base = None
                         if base_index is not None:
-                            base = data_object_loads(
+                            base = sakdb_loads(
                                 self.repo[base_index.oid].data.decode("utf-8")
                             )
                             path = Path(base_index.path)
                         ours = None
                         if ours_index is not None:
-                            ours = data_object_loads(
+                            ours = sakdb_loads(
                                 self.repo[ours_index.oid].data.decode("utf-8")
                             )
                             path = Path(ours_index.path)
                         theirs = None
                         if theirs_index is not None:
-                            theirs = data_object_loads(
+                            theirs = sakdb_loads(
                                 self.repo[theirs_index.oid].data.decode("utf-8")
                             )
                             path = Path(theirs_index.path)
@@ -167,7 +161,7 @@ class NameSpaceGitWriter(NameSpaceWriter):
                                 "There was some unresolved merge conflict here."
                             )
 
-                        merged_str = data_object_dumps(merged)
+                        merged_str = sakdb_dumps(merged)
 
                         blob = self.repo.create_blob(merged_str)
                         new_entry = pygit2.IndexEntry(
@@ -212,15 +206,15 @@ class NameSpaceGitWriter(NameSpaceWriter):
     def set_metadata(self, key: str, value: Any) -> None:
         metada_path = Path("metadata") / key
 
-        encoder = DataObjectEncoder()
+        encoder = SakDbEncoder()
         payload_str = json.dumps(value, default=encoder.default)
 
-        data = DataObjectFields(
-            DataObjectField(key="_type", payload=type(value).__name__),
-            DataObjectField(key=key, payload=payload_str),
+        data = SakDbFields(
+            SakDbField(key="_type", payload=type(value).__name__),
+            SakDbField(key=key, payload=payload_str),
         )
 
-        data_str = data_object_dumps(data)
+        data_str = sakdb_dumps(data)
         self._write(metada_path, data_str)
 
     def get_metadata(self, key: str) -> Any:
@@ -231,7 +225,7 @@ class NameSpaceGitWriter(NameSpaceWriter):
         if value_str is None:
             raise Exception(f"Failed to read data from metadata DB for key {key}")
 
-        data = data_object_loads(value_str)
+        data = sakdb_loads(value_str)
 
         if data is None:
             raise Exception(f"Could not load the entry {key} from metadata DB")
@@ -277,11 +271,11 @@ class NameSpaceGitWriter(NameSpaceWriter):
             print("Could not read path", path, str(e))
             return None
 
-    def _read_data_object(self, path: Path) -> Optional[DataObjectFields]:
+    def _read_sakdb(self, path: Path) -> Optional[SakDbFields]:
         value_str = self._read(path)
         if value_str is None:
             return None
-        return data_object_loads(value_str)
+        return sakdb_loads(value_str)
 
     def read(self, node_key: str, data_key: str) -> Optional[str]:
         node_path = Path("objects") / node_key[:2] / node_key
@@ -328,16 +322,18 @@ class NameSpaceGitWriter(NameSpaceWriter):
         self._write(data_path, value)
 
 
-class DataNamespace(object):
-    def __init__(self, graph: DataGraph, name: str, backend: "NameSpaceWriter") -> None:
-        super(DataNamespace, self).__init__()
+class SakDbNamespace(object):
+    def __init__(
+        self, graph: SakDbGraph, name: str, backend: "SakDbNamespaceBackend"
+    ) -> None:
+        super(SakDbNamespace, self).__init__()
         self.name = name
 
         self.backend = backend
 
-        self.objects: Dict[str, "DataObject"] = {}
+        self.objects: Dict[str, "SakDb"] = {}
 
-        self.graph: Optional["DataGraph"] = None
+        self.graph: Optional["SakDbGraph"] = None
         graph.add_namepace(self)
 
         # TODO: Read the version and check if it is compatible with the current implementation
@@ -347,7 +343,7 @@ class DataNamespace(object):
         # TODO: Use generators for this?
         return set(self.objects.keys()) | set(self.backend.node_keys())
 
-    def get_objects(self) -> List["DataObject"]:
+    def get_objects(self) -> List["SakDb"]:
         ret = []
         for key in self.get_object_keys():
             ret.append(self.get_object(key))
@@ -357,12 +353,12 @@ class DataNamespace(object):
         for obj in self.objects.values():
             obj.save()
 
-    def set_graph(self, graph: DataGraph) -> None:
+    def set_graph(self, graph: SakDbGraph) -> None:
         self.graph = graph
         if not graph.has_namespace_registered(self.name):
             graph.add_namepace(self)
 
-    def get_object(self, key: str) -> "DataObject":
+    def get_object(self, key: str) -> "SakDb":
         # Check if there is already this key in the graph, then return it.
         # Otherwise create this object in the Namespace and return it.
         if key in self.objects:
@@ -383,8 +379,8 @@ class DataNamespace(object):
             else:
                 obj = cl(self, key)
 
-                if not isinstance(obj, DataObject):
-                    raise Exception(f"Object {obj} should be an instance of DataObject")
+                if not isinstance(obj, SakDb):
+                    raise Exception(f"Object {obj} should be an instance of SakDb")
 
                 self.register_object(obj)
                 return obj
@@ -393,7 +389,7 @@ class DataNamespace(object):
         # TODO: I could check locally, otherwise also check in the filesystem
         return key in self.objects
 
-    def register_object(self, obj: "DataObject") -> None:
+    def register_object(self, obj: "SakDb") -> None:
         if not self.has_object(obj.key):
             self.objects[obj.key] = obj
 
@@ -401,34 +397,32 @@ class DataNamespace(object):
         return self.backend.get_metadata("version")
 
 
-class DataObjectEncoder(json.JSONEncoder):
+class SakDbEncoder(json.JSONEncoder):
     def __init__(self) -> None:
-        super(DataObjectEncoder, self).__init__()
+        super(SakDbEncoder, self).__init__()
 
     def default(self, value: Any) -> Any:
-        if isinstance(value, DataObject):
-            return {"_type": "DataObject", "key": value.key}
+        if isinstance(value, SakDb):
+            return {"_type": "SakDb", "key": value.key}
         else:
-            return super(DataObjectEncoder, self).default(value)
+            return super(SakDbEncoder, self).default(value)
 
 
-class DataObjectDecoder(object):
-    def __init__(self, graph: "DataGraph") -> None:
-        super(DataObjectDecoder, self).__init__()
+class SakDbDecoder(object):
+    def __init__(self, graph: "SakDbGraph") -> None:
+        super(SakDbDecoder, self).__init__()
         self.graph = graph
 
     def object_hook(self, value: Dict[str, Any]) -> Any:
         if "_type" in value:
-            if value["_type"] == "DataObject":
+            if value["_type"] == "SakDb":
                 return self.graph.get_object(value["key"])
         return value
 
 
-class DataObjectList(list):  # type: ignore
-    def __init__(
-        self, obj: "DataObject", obj_name: str, *args: Any, **vargs: Any
-    ) -> None:
-        super(DataObjectList, self).__init__(*args, **vargs)
+class SakDbList(list):  # type: ignore
+    def __init__(self, obj: "SakDb", obj_name: str, *args: Any, **vargs: Any) -> None:
+        super(SakDbList, self).__init__(*args, **vargs)
         self._obj = obj
         self._obj_name = obj_name
 
@@ -444,7 +438,7 @@ class DataObjectList(list):  # type: ignore
             "sort",
             "reverse",
         ]:
-            func = super(DataObjectList, self).__getattribute__(key)
+            func = super(SakDbList, self).__getattribute__(key)
 
             @functools.wraps(func)
             def wrapper(*args: Any, **vargs: Any) -> Any:
@@ -453,22 +447,22 @@ class DataObjectList(list):  # type: ignore
                 return ret
 
             return wrapper
-        return super(DataObjectList, self).__getattribute__(key)
+        return super(SakDbList, self).__getattribute__(key)
 
     def __setitem__(self, key: int, item: Any) -> None:  # type: ignore
-        super(DataObjectList, self).__setitem__(key, item)
+        super(SakDbList, self).__setitem__(key, item)
         setattr(self._obj, self._obj_name, self)
 
 
-class DataObjectDict(Dict[_KT, _VT]):
-    def __init__(self, obj: "DataObject", obj_name: str, *args, **vargs) -> None:  # type: ignore
-        super(DataObjectDict, self).__init__(*args, **vargs)
+class SakDbDict(Dict[_KT, _VT]):
+    def __init__(self, obj: "SakDb", obj_name: str, *args, **vargs) -> None:  # type: ignore
+        super(SakDbDict, self).__init__(*args, **vargs)
         self._obj = obj
         self._obj_name = obj_name
 
     def __getattribute__(self, key: str) -> Any:
         if key in ["clear", "update", "pop"]:
-            func = super(DataObjectDict, self).__getattribute__(key)
+            func = super(SakDbDict, self).__getattribute__(key)
 
             @functools.wraps(func)
             def wrapper(*args: Any, **vargs: Any) -> Any:
@@ -477,23 +471,23 @@ class DataObjectDict(Dict[_KT, _VT]):
                 return ret
 
             return wrapper
-        return super(DataObjectDict, self).__getattribute__(key)
+        return super(SakDbDict, self).__getattribute__(key)
 
     def __setitem__(self, key: _KT, item: _VT) -> None:
-        super(DataObjectDict, self).__setitem__(key, item)
+        super(SakDbDict, self).__setitem__(key, item)
         setattr(self._obj, self._obj_name, self)
 
     def __delitem__(self, key: _KT) -> None:
-        super(DataObjectDict, self).__delitem__(key)
+        super(SakDbDict, self).__delitem__(key)
         setattr(self._obj, self._obj_name, self)
 
 
-class DataObject(object):
-    namespace: DataNamespace
+class SakDb(object):
+    namespace: SakDbNamespace
     key: str
 
     def __init__(
-        self, namespace: "DataNamespace", key: Optional[str] = None, **kwargs: Any
+        self, namespace: "SakDbNamespace", key: Optional[str] = None, **kwargs: Any
     ) -> None:
         self.namespace = namespace
         if key is None:
@@ -525,9 +519,9 @@ class DataObject(object):
                 f"Namespace {self.namespace.name} must be attached to a graph."
             )
 
-        decoder = DataObjectDecoder(self.namespace.graph)
+        decoder = SakDbDecoder(self.namespace.graph)
 
-        data = data_object_loads(value_str)
+        data = sakdb_loads(value_str)
 
         if data is None:
             raise Exception(f"Could not load the entry {name} from DB")
@@ -547,7 +541,7 @@ class DataObject(object):
                 value = json.loads(field.payload, object_hook=decoder.object_hook)
                 tmp_list.append(value)
 
-            return DataObjectList(self, name, tmp_list)
+            return SakDbList(self, name, tmp_list)
 
         elif type_field.payload == "dict":
             # If the type is a dictionary.
@@ -559,7 +553,7 @@ class DataObject(object):
 
                 value = json.loads(field.payload, object_hook=decoder.object_hook)
                 tmp_dict[field.key] = value
-            return DataObjectDict(self, name, tmp_dict)
+            return SakDbDict(self, name, tmp_dict)
 
         else:
             # For all other types.
@@ -573,43 +567,41 @@ class DataObject(object):
 
     def __setattr__(self, name: str, value: Any) -> None:
         if name.startswith("_") or (name in ["namespace", "key"]):
-            super(DataObject, self).__setattr__(name, value)
+            super(SakDb, self).__setattr__(name, value)
             return
 
         try:
-            super(DataObject, self).__setattr__(name, value)
+            super(SakDb, self).__setattr__(name, value)
 
             if self.namespace.graph is None:
                 raise Exception(
                     f"Namespace {self.namespace.name} must be attached to a graph."
                 )
 
-            encoder = DataObjectEncoder()
+            encoder = SakDbEncoder()
 
             fields = []
 
             if isinstance(value, list):
-                fields.append(DataObjectField(key="_type", payload="list"))
+                fields.append(SakDbField(key="_type", payload="list"))
 
                 for idx, ivalue in enumerate(value):
                     payload_str = json.dumps(ivalue, default=encoder.default)
-                    fields.append(DataObjectField(key=str(idx), payload=payload_str))
+                    fields.append(SakDbField(key=str(idx), payload=payload_str))
             elif isinstance(value, dict):
-                fields.append(DataObjectField(key="_type", payload="dict"))
+                fields.append(SakDbField(key="_type", payload="dict"))
 
                 for ikey, ivalue in value.items():
                     payload_str = json.dumps(ivalue, default=encoder.default)
-                    fields.append(DataObjectField(key=ikey, payload=payload_str))
+                    fields.append(SakDbField(key=ikey, payload=payload_str))
             else:
-                fields.append(
-                    DataObjectField(key="_type", payload=type(value).__name__)
-                )
+                fields.append(SakDbField(key="_type", payload=type(value).__name__))
 
                 payload_str = json.dumps(value, default=encoder.default)
-                fields.append(DataObjectField(key=name, payload=payload_str))
+                fields.append(SakDbField(key=name, payload=payload_str))
 
-            data = DataObjectFields(*fields)
-            outvalue_str = data_object_dumps(data)
+            data = SakDbFields(*fields)
+            outvalue_str = sakdb_dumps(data)
 
             self.namespace.backend.write(self.key, name, outvalue_str)
         except Exception as e:

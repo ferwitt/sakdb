@@ -12,7 +12,7 @@ def payload_md5(payload: str) -> str:
     return "md5:" + hash_object.hexdigest()
 
 
-class DataObjectField:
+class SakDbField:
     ts: float
     key: str
     crc: str
@@ -44,13 +44,13 @@ class DataObjectField:
             self.crc = payload_md5(payload)
 
 
-class DataObjectFields:
-    fields: List[DataObjectField]
+class SakDbFields:
+    fields: List[SakDbField]
 
-    def __init__(self, *fields: DataObjectField) -> None:
-        self.fields: List[DataObjectFields] = list(fields)
+    def __init__(self, *fields: SakDbField) -> None:
+        self.fields: List[SakDbFields] = list(fields)
 
-    def get_by_key(self, key: str) -> Optional[DataObjectField]:
+    def get_by_key(self, key: str) -> Optional[SakDbField]:
         for field in self.fields:
             if field.key == key:
                 return field
@@ -63,7 +63,7 @@ class DataObjectFields:
         return ret
 
 
-def data_object_loads(data: str) -> Optional[DataObjectFields]:
+def sakdb_loads(data: str) -> Optional[SakDbFields]:
     ret = None
 
     for line_idx, line in enumerate(data.splitlines()):
@@ -77,9 +77,9 @@ def data_object_loads(data: str) -> Optional[DataObjectFields]:
         parsed_payload = json.loads(payload)
 
         if ret is None:
-            ret = DataObjectFields()
+            ret = SakDbFields()
         ret.fields.append(
-            DataObjectField(
+            SakDbField(
                 ts=parsed_header["t"],
                 key=parsed_header["k"],
                 crc=parsed_header["c"],
@@ -90,7 +90,7 @@ def data_object_loads(data: str) -> Optional[DataObjectFields]:
     return ret
 
 
-def data_object_dumps(data: DataObjectFields) -> str:
+def sakdb_dumps(data: SakDbFields) -> str:
     ret = []
 
     for field in data.fields:
@@ -104,12 +104,12 @@ def data_object_dumps(data: DataObjectFields) -> str:
 
 
 def merge(
-    base: Optional[DataObjectFields],
-    ours: Optional[DataObjectFields],
-    theirs: Optional[DataObjectFields],
-) -> DataObjectFields:
+    base: Optional[SakDbFields],
+    ours: Optional[SakDbFields],
+    theirs: Optional[SakDbFields],
+) -> SakDbFields:
 
-    new_fields: List[DataObjectField] = []
+    new_fields: List[SakDbField] = []
 
     # TODO(witt): Check everything that was removed.
     # If there is a common base.
@@ -160,4 +160,4 @@ def merge(
     if (base is None) and (ours is None) and theirs:
         new_fields = theirs.fields
 
-    return DataObjectFields(*new_fields)
+    return SakDbFields(*new_fields)
