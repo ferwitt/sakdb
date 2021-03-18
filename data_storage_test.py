@@ -80,25 +80,6 @@ def test_repository_version():
         assert version == VERSION
 
 
-# TODO(witt): This test is no longer valid. Metadata has a lot more in it...
-# def test_repository_version_cmd_line():
-#    # Given.
-#    with tempfile.TemporaryDirectory() as tmpdirname:
-#        g = DataGraph()
-#        nw = NameSpaceGitWriter(Path(tmpdirname), "refs/heads/master")
-#        DataNamespace(g, "data", nw)
-#
-#        # When.
-#        version = json.loads(
-#            run_getoutput(
-#                ["git", "show", "refs/heads/master:metadata/version"], cwd=tmpdirname
-#            )
-#        )
-#
-#        # Then.
-#        assert version == VERSION
-
-
 def test_int_increment():
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
