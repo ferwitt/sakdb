@@ -8,13 +8,22 @@ import subprocess
 
 from IPython import embed
 
-from data_storage import DataGraph, NameSpaceGitWriter, DataNamespace, VERSION, DataObject
+from data_storage import (
+    DataGraph,
+    NameSpaceGitWriter,
+    DataNamespace,
+    VERSION,
+    DataObject,
+)
+
 
 class DBObject(DataObject):
     name: str
 
+
 def run(cmd, cwd):
     subprocess.run(cmd, check=True, cwd=cwd)
+
 
 def run_getoutput(cmd, cwd):
     p = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, cwd=cwd)
@@ -33,10 +42,11 @@ def test_create_repository():
         # Then.
         assert nw.repo.is_bare == True
 
+
 def test_already_created_repository():
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
-        subprocess.run(['git', 'init', tmpdirname], check=True)
+        subprocess.run(["git", "init", tmpdirname], check=True)
 
         # When.
         g = DataGraph()
@@ -60,6 +70,7 @@ def test_repository_version():
         # Then.
         assert version == VERSION
 
+
 def test_repository_version_cmd_line():
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
@@ -68,8 +79,11 @@ def test_repository_version_cmd_line():
         n = DataNamespace(g, "data", nw)
 
         # When.
-        version= json.loads(run_getoutput(['git', 'show', 'refs/heads/master:metadata/version'],
-                cwd=tmpdirname))
+        version = json.loads(
+            run_getoutput(
+                ["git", "show", "refs/heads/master:metadata/version"], cwd=tmpdirname
+            )
+        )
 
         # Then.
         assert version == VERSION
@@ -98,7 +112,7 @@ def test_write_a_read_b():
         assert b.name == "helloWorld"
 
 
-#def test_sync_with_git_command_line():
+# def test_sync_with_git_command_line():
 #    with tempfile.TemporaryDirectory() as tmpdirname:
 #        # Given.
 #        dirA = Path(tmpdirname) / 'dirA'
@@ -129,11 +143,12 @@ def test_write_a_read_b():
 #        assert a.name == "helloWorld"
 #        assert b.name == "helloWorld"
 
+
 def test_sync():
     with tempfile.TemporaryDirectory() as tmpdirname:
         # Given.
-        dirA = Path(tmpdirname) / 'dirA'
-        dirB = Path(tmpdirname) / 'dirB'
+        dirA = Path(tmpdirname) / "dirA"
+        dirB = Path(tmpdirname) / "dirB"
 
         dirA.mkdir()
         dirB.mkdir()
@@ -151,21 +166,20 @@ def test_sync():
         g_b.register_class(DBObject)
 
         # When
-        nw_a.add_remote('origin', str(dirB))
-        nw_b.add_remote('origin', str(dirA))
+        nw_a.add_remote("origin", str(dirB))
+        nw_b.add_remote("origin", str(dirA))
 
         nw_a.sync()
         nw_b.sync()
-        #nw_a.sync()
+        # nw_a.sync()
 
-        #import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
 
         ## When.
-        #run(['git', 'remote', 'add', 'origin', dirA], cwd=dirB)
-        #run(['git', 'pull', 'origin', 'master'], cwd=dirB)
+        # run(['git', 'remote', 'add', 'origin', dirA], cwd=dirB)
+        # run(['git', 'pull', 'origin', 'master'], cwd=dirB)
 
         b = DBObject(n_b, a.key)
-
 
         # Then.
         assert a.name == "helloWorld"
@@ -175,8 +189,8 @@ def test_sync():
 def test_sync_with_git_command_line_conflict():
     with tempfile.TemporaryDirectory() as tmpdirname:
         # Given.
-        dirA = Path(tmpdirname) / 'dirA'
-        dirB = Path(tmpdirname) / 'dirB'
+        dirA = Path(tmpdirname) / "dirA"
+        dirB = Path(tmpdirname) / "dirB"
 
         dirA.mkdir()
         dirB.mkdir()
@@ -202,8 +216,8 @@ def test_sync_with_git_command_line_conflict():
         # When
 
         # Link the repositories with remotes.
-        nw_a.add_remote('origin', str(dirB))
-        nw_b.add_remote('origin', str(dirA))
+        nw_a.add_remote("origin", str(dirB))
+        nw_b.add_remote("origin", str(dirA))
 
         # Sync the repositories. The repo A is supposed to have trhe value from repo B now.
         nw_a.sync()

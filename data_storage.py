@@ -1,11 +1,16 @@
 import uuid
 from pathlib import Path
 import json
-import datetime
 
 from typing import List, Optional, Dict, Any, Set
 
-from data_field import data_object_loads, data_object_dumps, DataObjectFields, DataObjectField, PAYLOAD_SEPARATOR, merge
+from data_field import (
+    data_object_loads,
+    data_object_dumps,
+    DataObjectFields,
+    DataObjectField,
+    merge,
+)
 
 import pygit2
 
@@ -59,7 +64,7 @@ class NameSpaceWriter(object):
     def set_metadata(self, key: str, value: Any) -> None:
         pass
 
-    def get_metadata(self, key: str) -> Any:
+    def get_metadata(self, key: str) -> Optional[str]:
         return None
 
     def node_keys(self) -> List[str]:
@@ -78,15 +83,15 @@ class NameSpaceGitWriter(NameSpaceWriter):
 
         self.repo = pygit2.init_repository(path, True)
 
-        #try:
+        # try:
         #    self.repo = pygit2.Repository(path)
-        #except pygit2.GitError as e:
+        # except pygit2.GitError as e:
         #    print(repr(e))
         #    raise(e)
         self.ref = ref
 
         if self.ref not in self.repo.references:
-            #author = pygit2.Signature("a b", "a@b")
+            # author = pygit2.Signature("a b", "a@b")
             author = self.repo.default_signature
             committer = author
             commit_message = "Initial commit"
@@ -102,95 +107,91 @@ class NameSpaceGitWriter(NameSpaceWriter):
         # TODO(witt): What is remote already exists?
         return self.repo.remotes.create(name, url)
 
-    def sync(self, remotes=[]) -> None:
+    def sync(self, remotes: List[str] = []) -> None:
         for remote in self.repo.remotes:
             remote.fetch()
 
         for branch_name in self.repo.branches.local:
             branch = self.repo.branches[branch_name]
 
-            if branch_name.startswith('synced/'):
+            if branch_name.startswith("synced/"):
                 continue
 
             # I will create the sync branch.
-            synced_branch_name = f'synced/{branch_name}'
+            synced_branch_name = f"synced/{branch_name}"
             if synced_branch_name not in self.repo.branches:
                 branch_commit = self.repo[branch.target]
                 self.repo.branches.local.create(synced_branch_name, branch_commit)
 
-            def do_merge(theirs_branch):
+            def do_merge(theirs_branch: pygit2.IndexEntry) -> None:
                 theirs_commit = self.repo[theirs_branch.target]
 
-
                 synced_branch = self.repo.branches[synced_branch_name]
-                synced_branch_coomit = self.repo[synced_branch.target]
 
-                synced_branch_reference = self.repo.lookup_branch
-
-                #import pdb; pdb.set_trace()
-
-                merge_result, _ = self.repo.merge_analysis(theirs_branch.target, synced_branch.name)
+                merge_result, _ = self.repo.merge_analysis(
+                    theirs_branch.target, synced_branch.name
+                )
 
                 if merge_result & pygit2.GIT_MERGE_ANALYSIS_UP_TO_DATE:
                     return
-
-                #from IPython import embed; embed()
 
                 merged_index = self.repo.merge_commits(synced_branch, theirs_commit)
 
                 if merged_index.conflicts:
 
-                    resolved_conflict_idx = []
-                    for conflict_idx, indexes  in enumerate(list(merged_index.conflicts)):
-                        #import pdb; pdb.set_trace()
-
+                    for (base_index, ours_index, theirs_index) in list(
+                        merged_index.conflicts
+                    ):
                         path = None
-                        (base_index, ours_index, theirs_index) = indexes
 
-                        base= None
+                        base = None
                         if base_index is not None:
-                            base = data_object_loads(self.repo[base_index.oid].data.decode('utf-8'))
+                            base = data_object_loads(
+                                self.repo[base_index.oid].data.decode("utf-8")
+                            )
                             path = Path(base_index.path)
                         ours = None
                         if ours_index is not None:
-                            ours = data_object_loads(self.repo[ours_index.oid].data.decode('utf-8'))
+                            ours = data_object_loads(
+                                self.repo[ours_index.oid].data.decode("utf-8")
+                            )
                             path = Path(ours_index.path)
                         theirs = None
                         if theirs_index is not None:
-                            theirs = data_object_loads(self.repo[theirs_index.oid].data.decode('utf-8'))
+                            theirs = data_object_loads(
+                                self.repo[theirs_index.oid].data.decode("utf-8")
+                            )
                             path = Path(theirs_index.path)
 
                         merged = merge(base, ours, theirs)
                         if merged is None:
-                            raise Exception("There was some unresolved merge conflict here.")
+                            raise Exception(
+                                "There was some unresolved merge conflict here."
+                            )
 
                         merged_str = data_object_dumps(merged)
 
-                        #from IPython import embed; embed()
-                        #import pdb; pdb.set_trace()
-
-                        #merged_index.remove(str(path))
-
-                        # TODO(witt): What is the path?
                         blob = self.repo.create_blob(merged_str)
-                        new_entry = pygit2.IndexEntry(str(path), blob, pygit2.GIT_FILEMODE_BLOB)
+                        new_entry = pygit2.IndexEntry(
+                            str(path), blob, pygit2.GIT_FILEMODE_BLOB
+                        )
                         merged_index.add(new_entry)
 
                         del merged_index.conflicts[str(path)]
-
 
                 user = self.repo.default_signature
                 tree = merged_index.write_tree()
                 message = "Merging branches"
 
                 # TODO(witt): Is it necessary to move the synced branch?
-                new_commit = self.repo.create_commit(synced_branch.name, user, user, message, tree,
-                        [synced_branch.target, theirs_branch.target])
-
-                #from IPython import embed; embed()
-                #synced_branch.set_target(new_commit)
-
-
+                self.repo.create_commit(
+                    synced_branch.name,
+                    user,
+                    user,
+                    message,
+                    tree,
+                    [synced_branch.target, theirs_branch.target],
+                )
 
             # Merge the synced branch with the local branch.
             do_merge(branch)
@@ -214,11 +215,11 @@ class NameSpaceGitWriter(NameSpaceWriter):
         metada_path = Path("metadata") / key
         self._write(metada_path, json.dumps(value, indent=1))
 
-    def get_metadata(self, key: str) -> Any:
+    def get_metadata(self, key: str) -> Optional[str]:
         metada_path = Path("metadata") / key
         value = self._read(metada_path)
         if value is not None:
-            return json.loads(value)
+            return json.loads(value)  # type: ignore
         return None
 
     def node_keys(self) -> List[str]:
@@ -284,7 +285,7 @@ class NameSpaceGitWriter(NameSpaceWriter):
         diff = tree.diff_to_tree(self.repo[tid])
 
         if len(list(diff.deltas)):
-            #author = pygit2.Signature("a b", "a@b")
+            # author = pygit2.Signature("a b", "a@b")
             author = self.repo.default_signature
             committer = author
             commit_message = "Add new entry"
@@ -373,14 +374,13 @@ class DataNamespace(object):
         if not self.has_object(obj.key):
             self.objects[obj.key] = obj
 
-    def get_version(self) -> str:
-        return self.backend.get_metadata('version')
+    def get_version(self) -> Optional[str]:
+        return self.backend.get_metadata("version")
 
 
 class DataObjectEncoder(json.JSONEncoder):
-    def __init__(self, *args, **vargs) -> None:
-        super(DataObjectEncoder, self).__init__(*args, **vargs)
-        #self.graph = graph
+    def __init__(self) -> None:
+        super(DataObjectEncoder, self).__init__()
 
     def default(self, value: Any) -> Any:
         if isinstance(value, DataObject):
@@ -388,7 +388,7 @@ class DataObjectEncoder(json.JSONEncoder):
             # merge conflicts.
             return {"_type": "DataObject", "key": value.key}
         else:
-            return super(DataObjectEncoder, self).default(val)
+            return super(DataObjectEncoder, self).default(value)
 
 
 class DataObjectDecoder(object):
@@ -401,9 +401,6 @@ class DataObjectDecoder(object):
             if value["_type"] == "DataObject":
                 return self.graph.get_object(value["key"])
         return value
-
-
-
 
 
 class DataObject(object):
@@ -432,7 +429,6 @@ class DataObject(object):
     def __getattr__structure__(self, name: str) -> Dict[str, Any]:
         pass
 
-
     def __getattribute__(self, name: str) -> Any:
         if name.startswith("_") or (name in ["namespace", "key"]):
             return super().__getattribute__(name)
@@ -453,7 +449,15 @@ class DataObject(object):
 
         data = data_object_loads(value_str)
 
-        value = json.loads(data.get_by_key(name).payload, object_hook=decoder.object_hook)
+        if data is None:
+            raise Exception(f"Could not load the entry {name} from DB")
+
+        object_field = data.get_by_key(name)
+
+        if object_field is None:
+            raise Exception(f"No attribute {name} for {self}.")
+
+        value = json.loads(object_field.payload, object_hook=decoder.object_hook)
         return value
 
     def __setattr__(self, name: str, value: Any) -> None:
@@ -464,35 +468,29 @@ class DataObject(object):
         try:
             super(DataObject, self).__setattr__(name, value)
 
-
             if self.namespace.graph is None:
                 raise Exception(
                     f"Namespace {self.namespace.name} must be attached to a graph."
                 )
 
             encoder = DataObjectEncoder(
-                    #self.namespace.graph
-                    )
+                # self.namespace.graph
+            )
             payload_str = json.dumps(value, default=encoder.default)
 
             data = DataObjectFields(
-                    type_name = type(value).__name__,
-                    fields=[
-                        DataObjectField(
-                            key=name,
-                            payload = payload_str
-                            )
-                        ]
-                    )
+                type_name=type(value).__name__,
+                fields=[DataObjectField(key=name, payload=payload_str)],
+            )
 
             outvalue_str = data_object_dumps(data)
 
-            self.namespace.backend.write( self.key, name, outvalue_str) 
+            self.namespace.backend.write(self.key, name, outvalue_str)
         except Exception as e:
             raise (e)
 
     def __getitem__(self, name: str) -> Any:
-        return self.__getattr__(name)
+        return self.__getattribute__(name)
 
     def __str__(self) -> str:
         return f"<{type(self).__name__} key: {self.key}>"
@@ -521,10 +519,10 @@ if __name__ == "__main__":
     a = DataObject(n, "1af852330e2c4e419c77923faf00f38c")
 
     b = DataObject2(n, key="60b20f9340894410b18133b53823a3f5")
-    b.name = 'Foo'
-    b.hello = 'world'
+    b.name = "Foo"
+    b.hello = "world"
     b.otherobj = a
-    
+
     b.hey = [a, a, b]
     b.foobar = [1]
 
