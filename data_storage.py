@@ -1,18 +1,17 @@
+import json
 import uuid
 from pathlib import Path
-import json
-
-from typing import List, Optional, Dict, Any, Set
-
-from data_field import (
-    data_object_loads,
-    data_object_dumps,
-    DataObjectFields,
-    DataObjectField,
-    merge,
-)
+from typing import Any, Dict, List, Optional, Set
 
 import pygit2
+
+from data_field import (
+    DataObjectField,
+    DataObjectFields,
+    data_object_dumps,
+    data_object_loads,
+    merge,
+)
 
 VERSION = "0.0.1"
 

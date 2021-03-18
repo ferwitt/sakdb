@@ -1,9 +1,8 @@
-import json
-
-from typing import List, Optional
-import uuid
 import datetime
 import hashlib
+import json
+import uuid
+from typing import List, Optional
 
 PAYLOAD_SEPARATOR = " || "
 

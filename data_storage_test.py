@@ -1,19 +1,16 @@
-from pathlib import Path
-
-import tempfile
-import time
 import json
-
 import subprocess
+import tempfile
+from pathlib import Path
 
 from IPython import embed
 
 from data_storage import (
-    DataGraph,
-    NameSpaceGitWriter,
-    DataNamespace,
     VERSION,
+    DataGraph,
+    DataNamespace,
     DataObject,
+    NameSpaceGitWriter,
 )
 
 
@@ -37,7 +34,7 @@ def test_create_repository():
         # When.
         g = DataGraph()
         nw = NameSpaceGitWriter(Path(tmpdirname), "refs/heads/master")
-        n = DataNamespace(g, "data", nw)
+        DataNamespace(g, "data", nw)
 
         # Then.
         assert nw.repo.is_bare == True
@@ -51,7 +48,7 @@ def test_already_created_repository():
         # When.
         g = DataGraph()
         nw = NameSpaceGitWriter(Path(tmpdirname), "refs/heads/master")
-        n = DataNamespace(g, "data", nw)
+        DataNamespace(g, "data", nw)
 
         # Then.
         assert nw.repo.is_bare == False
@@ -76,7 +73,7 @@ def test_repository_version_cmd_line():
     with tempfile.TemporaryDirectory() as tmpdirname:
         g = DataGraph()
         nw = NameSpaceGitWriter(Path(tmpdirname), "refs/heads/master")
-        n = DataNamespace(g, "data", nw)
+        DataNamespace(g, "data", nw)
 
         # When.
         version = json.loads(

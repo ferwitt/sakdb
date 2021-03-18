@@ -1,23 +1,13 @@
-from pathlib import Path
-
-import tempfile
-import time
-import json
-
-import subprocess
-
 from IPython import embed
 
 from data_field import (
-    data_object_loads,
-    data_object_dumps,
-    DataObjectFields,
-    DataObjectField,
     PAYLOAD_SEPARATOR,
+    DataObjectField,
+    DataObjectFields,
+    data_object_dumps,
+    data_object_loads,
     merge,
 )
-
-import base64
 
 
 def test_dumps():
@@ -75,7 +65,6 @@ def test_loads():
 
 def test_merge_no_common_base():
 
-    base_data = None
     ours_data = (
         '{"t": "str"}\n{"t": 1616074500.117626, "k": "name",'
         ' "c": "md5:4d498457eff880b7aadb6e620344a8e3"} || "\\"helloWorld\\""'
