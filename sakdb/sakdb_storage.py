@@ -338,7 +338,30 @@ class SakDbNamespace(object):
         graph.add_namepace(self)
 
         # TODO: Read the version and check if it is compatible with the current implementation
-        self.backend.set_metadata("version", VERSION)
+        try:
+            version = self.backend.get_metadata("version")
+        except Exception:
+            version = None
+
+        if version is not None:
+            if not self._validate_version(version):
+                raise Exception(
+                    f"Repo version ({version}) not supported, please update the system."
+                )
+        else:
+            self.backend.set_metadata("version", VERSION)
+
+    def _validate_version(self, version: str) -> bool:
+        # Extract the repository version components.
+        repo_version, _, _ = (int(v) for v in version.split("."))
+
+        # Extract the current software version components.
+        software_version, _, _ = (int(v) for v in VERSION.split("."))
+
+        # If the major version number is greater then the supported version.
+        if repo_version > software_version:
+            return False
+        return True
 
     def get_object_keys(self) -> Set[str]:
         # TODO: Use generators for this?

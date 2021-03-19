@@ -78,6 +78,28 @@ def test_repository_version() -> None:
         assert version == VERSION
 
 
+def test_repository_version_compatibility() -> None:
+    # Given.
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        g = SakDbGraph()
+        nw = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
+        n = SakDbNamespace(g, "data", nw)
+
+        # When.
+        ret1 = n._validate_version(
+            ".".join([str(int(x) + 1) for x in VERSION.split(".")])
+        )
+        ret2 = n._validate_version(VERSION)
+        ret3 = n._validate_version(
+            ".".join([str(min(int(x) - 1, 0)) for x in VERSION.split(".")])
+        )
+
+        # Then.
+        assert ret1 is False
+        assert ret2 is True
+        assert ret3 is True
+
+
 def test_int_increment() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
