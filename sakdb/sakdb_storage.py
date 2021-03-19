@@ -63,16 +63,16 @@ class SakDbNamespaceBackend(object):
     def set_metadata(self, key: str, value: Any) -> None:
         pass
 
-    def get_metadata(self, key: str) -> Optional[str]:
+    def get_metadata(self, key: str) -> Optional[Any]:
         return None
 
     def node_keys(self) -> List[str]:
         return []
 
-    def read(self, node_key: str, data_key: str) -> Optional[str]:
+    def read(self, node_key: str, data_key: str) -> Optional[SakDbFields]:
         return None
 
-    def write(self, node_key: str, data_key: str, value: str) -> None:
+    def write(self, node_key: str, data_key: str, value: SakDbFields) -> None:
         pass
 
 
@@ -215,19 +215,12 @@ class SakDbNamespaceGit(SakDbNamespaceBackend):
             SakDbField(key=key, payload=payload_str),
         )
 
-        data_str = sakdb_dumps(data)
-        self._write(metada_path, data_str)
+        self._write_sakdb(metada_path, data)
 
     def get_metadata(self, key: str) -> Any:
         metada_path = Path("metadata") / key
 
-        value_str = self._read(metada_path)
-
-        if value_str is None:
-            raise Exception(f"Failed to read data from metadata DB for key {key}")
-
-        data = sakdb_loads(value_str)
-
+        data = self._read_sakdb(metada_path)
         if data is None:
             raise Exception(f"Could not load the entry {key} from metadata DB")
 
@@ -278,16 +271,10 @@ class SakDbNamespaceGit(SakDbNamespaceBackend):
             return None
         return sakdb_loads(value_str)
 
-    def read(self, node_key: str, data_key: str) -> Optional[str]:
+    def read(self, node_key: str, data_key: str) -> Optional[SakDbFields]:
         node_path = Path("objects") / node_key[:2] / node_key
         data_path = node_path / data_key
-
-        ret = self._read(data_path)
-        if isinstance(ret, str):
-            return ret
-        else:
-            return None
-            # raise Exception("This should be a string")
+        return self._read_sakdb(data_path)
 
     def _write(self, path: Path, value: str) -> None:
         ref = self.repo.references[self.ref].target
@@ -316,11 +303,14 @@ class SakDbNamespaceGit(SakDbNamespaceBackend):
                 self.ref, author, committer, commit_message, tid, [ref]
             )
 
-    def write(self, node_key: str, data_key: str, value: str) -> None:
+    def _write_sakdb(self, path: Path, value: SakDbFields) -> None:
+        value_str = sakdb_dumps(value)
+        self._write(path, value_str)
+
+    def write(self, node_key: str, data_key: str, value: SakDbFields) -> None:
         node_path = Path("objects") / node_key[:2] / node_key
         data_path = node_path / data_key
-
-        self._write(data_path, value)
+        self._write_sakdb(data_path, value)
 
 
 class SakDbNamespace(object):
@@ -390,9 +380,16 @@ class SakDbNamespace(object):
 
         # TODO: How do I properly choose the class. The idea is to have a field informing the class
         # of this object, then I instantiate this specific class.
-        clname = self.backend.read(key, "cl.txt")
-        if clname is None:
+        cl_fields = self.backend.read(key, "_cl")
+        if cl_fields is None:
             raise Exception(f"Failed to read the class type for object {key}")
+
+        clname_fields = cl_fields.get_by_key("_cl")
+        if clname_fields is None:
+            raise Exception(
+                f"Failed to extract the class name from the DB for object {key}"
+            )
+        clname = clname_fields.payload
 
         if self.graph is None:
             raise Exception(f"No graph registered for namespace {self.name}!")
@@ -534,15 +531,17 @@ class SakDbObject(object):
             setattr(self, name, value)
 
     def _save(self) -> None:
-        self.namespace.backend.write(self.key, "cl.txt", type(self).__name__)
+        cl_fields = SakDbFields(SakDbField(key="_cl", payload=type(self).__name__))
+
+        self.namespace.backend.write(self.key, "_cl", cl_fields)
 
     def __getattribute__(self, name: str) -> Any:
         if name.startswith("_") or (name in ["namespace", "key"]):
             return super().__getattribute__(name)
 
-        value_str = self.namespace.backend.read(self.key, name)
+        data = self.namespace.backend.read(self.key, name)
 
-        if value_str is None:
+        if data is None:
             raise Exception(f"{self} has no attribute {name}.")
 
         if self.namespace.graph is None:
@@ -551,11 +550,6 @@ class SakDbObject(object):
             )
 
         decoder = SakDbDecoder(self.namespace.graph)
-
-        data = sakdb_loads(value_str)
-
-        if data is None:
-            raise Exception(f"Could not load the entry {name} from DB")
 
         type_field = data.get_by_key("_type")
         if type_field is None:
@@ -632,9 +626,7 @@ class SakDbObject(object):
                 fields.append(SakDbField(key=name, payload=payload_str))
 
             data = SakDbFields(*fields)
-            outvalue_str = sakdb_dumps(data)
-
-            self.namespace.backend.write(self.key, name, outvalue_str)
+            self.namespace.backend.write(self.key, name, data)
         except Exception as e:
             raise (e)
 
