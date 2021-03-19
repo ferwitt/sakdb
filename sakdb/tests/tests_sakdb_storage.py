@@ -769,7 +769,7 @@ def test_sync_list_with_git_command_common_base() -> None:
 
         # When.
         a.my_list = [3, 4, 5]
-        b.my_list = [1, 2]
+        b.my_list = [11, 22]
 
         # Then.
         assert a.my_list[0] == 3
@@ -777,8 +777,8 @@ def test_sync_list_with_git_command_common_base() -> None:
         assert a.my_list[2] == 5
         assert len(a.my_list) == 3
 
-        assert b.my_list[0] == 1
-        assert b.my_list[1] == 2
+        assert b.my_list[0] == 11
+        assert b.my_list[1] == 22
         assert len(b.my_list) == 2
 
         # When - Sync the repositories. The repo A is supposed to have trhe value from repo B now.
@@ -788,13 +788,13 @@ def test_sync_list_with_git_command_common_base() -> None:
         nw_b.sync()
 
         # Then.
-        assert a.my_list[0] == 1
-        assert a.my_list[1] == 2
+        assert a.my_list[0] == 11
+        assert a.my_list[1] == 22
         assert a.my_list[2] == 5
         assert len(a.my_list) == 3
 
-        assert b.my_list[0] == 1
-        assert b.my_list[1] == 2
+        assert b.my_list[0] == 11
+        assert b.my_list[1] == 22
         assert b.my_list[2] == 5
         assert len(b.my_list) == 3
 

@@ -304,6 +304,20 @@ class SakDbNamespaceGit(SakDbNamespaceBackend):
             )
 
     def _write_sakdb(self, path: Path, value: SakDbFields) -> None:
+
+        # Check if content changed, if not do not update the timestamps.
+        prev_value = self._read_sakdb(path)
+        if prev_value is not None:
+            for prev_field in prev_value.fields:
+                new_field = value.get_by_key(prev_field.key)
+
+                if new_field is None:
+                    continue
+
+                if new_field.crc == prev_field.crc:
+                    new_field.ts = prev_field.ts
+
+        # Dump sanitized timestamp value to the Git.
         value_str = sakdb_dumps(value)
         self._write(path, value_str)
 
