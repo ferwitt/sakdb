@@ -34,7 +34,7 @@ class SakDbGraph(object):
         for n in self.namespaces.values():
             n.save()
 
-    def get_object(self, key: str) -> Optional["SakDb"]:
+    def get_object(self, key: str) -> Optional["SakDbObject"]:
         for n in self.namespaces.values():
             if n.has_object(key):
                 return n.get_object(key)
@@ -48,7 +48,7 @@ class SakDbGraph(object):
     def get_class(self, clname: str) -> type:
         return self.classes[clname]
 
-    def get_objects(self) -> List["SakDb"]:
+    def get_objects(self) -> List["SakDbObject"]:
         ret = []
         for n in self.namespaces.values():
             ret += list(n.get_objects())
@@ -331,7 +331,7 @@ class SakDbNamespace(object):
 
         self.backend = backend
 
-        self.objects: Dict[str, "SakDb"] = {}
+        self.objects: Dict[str, "SakDbObject"] = {}
 
         self.graph: Optional["SakDbGraph"] = None
         graph.add_namepace(self)
@@ -343,7 +343,7 @@ class SakDbNamespace(object):
         # TODO: Use generators for this?
         return set(self.objects.keys()) | set(self.backend.node_keys())
 
-    def get_objects(self) -> List["SakDb"]:
+    def get_objects(self) -> List["SakDbObject"]:
         ret = []
         for key in self.get_object_keys():
             ret.append(self.get_object(key))
@@ -358,7 +358,7 @@ class SakDbNamespace(object):
         if not graph.has_namespace_registered(self.name):
             graph.add_namepace(self)
 
-    def get_object(self, key: str) -> "SakDb":
+    def get_object(self, key: str) -> "SakDbObject":
         # Check if there is already this key in the graph, then return it.
         # Otherwise create this object in the Namespace and return it.
         if key in self.objects:
@@ -379,8 +379,10 @@ class SakDbNamespace(object):
             else:
                 obj = cl(self, key)
 
-                if not isinstance(obj, SakDb):
-                    raise Exception(f"Object {obj} should be an instance of SakDb")
+                if not isinstance(obj, SakDbObject):
+                    raise Exception(
+                        f"Object {obj} should be an instance of SakDbObject"
+                    )
 
                 self.register_object(obj)
                 return obj
@@ -389,7 +391,7 @@ class SakDbNamespace(object):
         # TODO: I could check locally, otherwise also check in the filesystem
         return key in self.objects
 
-    def register_object(self, obj: "SakDb") -> None:
+    def register_object(self, obj: "SakDbObject") -> None:
         if not self.has_object(obj.key):
             self.objects[obj.key] = obj
 
@@ -402,8 +404,8 @@ class SakDbEncoder(json.JSONEncoder):
         super(SakDbEncoder, self).__init__()
 
     def default(self, value: Any) -> Any:
-        if isinstance(value, SakDb):
-            return {"_type": "SakDb", "key": value.key}
+        if isinstance(value, SakDbObject):
+            return {"_type": "SakDbObject", "key": value.key}
         else:
             return super(SakDbEncoder, self).default(value)
 
@@ -415,13 +417,15 @@ class SakDbDecoder(object):
 
     def object_hook(self, value: Dict[str, Any]) -> Any:
         if "_type" in value:
-            if value["_type"] == "SakDb":
+            if value["_type"] == "SakDbObject":
                 return self.graph.get_object(value["key"])
         return value
 
 
 class SakDbList(list):  # type: ignore
-    def __init__(self, obj: "SakDb", obj_name: str, *args: Any, **vargs: Any) -> None:
+    def __init__(
+        self, obj: "SakDbObject", obj_name: str, *args: Any, **vargs: Any
+    ) -> None:
         super(SakDbList, self).__init__(*args, **vargs)
         self._obj = obj
         self._obj_name = obj_name
@@ -455,7 +459,7 @@ class SakDbList(list):  # type: ignore
 
 
 class SakDbDict(Dict[_KT, _VT]):
-    def __init__(self, obj: "SakDb", obj_name: str, *args, **vargs) -> None:  # type: ignore
+    def __init__(self, obj: "SakDbObject", obj_name: str, *args, **vargs) -> None:  # type: ignore
         super(SakDbDict, self).__init__(*args, **vargs)
         self._obj = obj
         self._obj_name = obj_name
@@ -482,7 +486,7 @@ class SakDbDict(Dict[_KT, _VT]):
         setattr(self._obj, self._obj_name, self)
 
 
-class SakDb(object):
+class SakDbObject(object):
     namespace: SakDbNamespace
     key: str
 
@@ -567,11 +571,11 @@ class SakDb(object):
 
     def __setattr__(self, name: str, value: Any) -> None:
         if name.startswith("_") or (name in ["namespace", "key"]):
-            super(SakDb, self).__setattr__(name, value)
+            super(SakDbObject, self).__setattr__(name, value)
             return
 
         try:
-            super(SakDb, self).__setattr__(name, value)
+            super(SakDbObject, self).__setattr__(name, value)
 
             if self.namespace.graph is None:
                 raise Exception(

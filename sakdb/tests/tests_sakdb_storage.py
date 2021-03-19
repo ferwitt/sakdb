@@ -5,26 +5,26 @@ from typing import Any, Dict, List
 
 from sakdb.sakdb_storage import (
     VERSION,
-    SakDb,
     SakDbGraph,
     SakDbNamespace,
     SakDbNamespaceGit,
+    SakDbObject,
 )
 
 
-class DBObjectInt(SakDb):
+class DBObjectInt(SakDbObject):
     my_int: int
 
 
-class DBObjectString(SakDb):
+class DBObjectString(SakDbObject):
     my_string: str
 
 
-class DBObjectDict(SakDb):
+class DBObjectDict(SakDbObject):
     my_dict: Dict[str, Any]
 
 
-class DBObjectList(SakDb):
+class DBObjectList(SakDbObject):
     my_list: List[int]
 
 
