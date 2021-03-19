@@ -36,8 +36,9 @@ class SakDbGraph(object):
 
     def get_object(self, key: str) -> Optional["SakDbObject"]:
         for n in self.namespaces.values():
-            if n.has_object(key):
-                return n.get_object(key)
+            obj = n.get_object(key)
+            if obj is not None:
+                return obj
         return None
 
     def register_class(self, cl: type) -> None:
@@ -267,8 +268,8 @@ class SakDbNamespaceGit(SakDbNamespaceBackend):
                 return ret
             else:
                 return None
-        except Exception as e:
-            print("Could not read path", path, str(e))
+        except Exception:
+            Exception("Could not read {path} in {self}.")
             return None
 
     def _read_sakdb(self, path: Path) -> Optional[SakDbFields]:
@@ -388,8 +389,11 @@ class SakDbNamespace(object):
                 return obj
 
     def has_object(self, key: str) -> bool:
-        # TODO: I could check locally, otherwise also check in the filesystem
-        return key in self.objects
+        try:
+            obj = self.get_object(key)
+        except Exception:
+            return False
+        return obj is not None
 
     def register_object(self, obj: "SakDbObject") -> None:
         if not self.has_object(obj.key):
