@@ -174,7 +174,7 @@ class SakDbNamespaceGit(SakDbNamespaceBackend):
 
                 user = self.repo.default_signature
                 tree = merged_index.write_tree()
-                message = "Merging branches"
+                message = f"Merge {theirs_branch.name}"
 
                 # TODO(witt): Is it necessary to move the synced branch?
                 self.repo.create_commit(
@@ -208,7 +208,7 @@ class SakDbNamespaceGit(SakDbNamespaceBackend):
         metada_path = Path("metadata") / key
 
         encoder = SakDbEncoder()
-        payload_str = json.dumps(value, default=encoder.default)
+        payload_str = json.dumps(value, default=encoder.default, separators=(",", ":"))
 
         data = SakDbFields(
             SakDbField(key="_type", payload=type(value).__name__),
@@ -306,16 +306,12 @@ class SakDbNamespaceGit(SakDbNamespaceBackend):
 
         tid = index.write_tree(self.repo)
 
-        # Old really slow way of comparing trees.
-        # diff = tree.diff_to_tree(self.repo[tid])
-        # if len(list(diff.deltas)):
-
         # If the tree id is different, then commit it.
         if tid != tree.id:
             # author = pygit2.Signature("a b", "a@b")
             author = self.repo.default_signature
             committer = author
-            commit_message = "Add new entry"
+            commit_message = "Add obj"
 
             self.repo.create_commit(
                 self.ref, author, committer, commit_message, tid, [ref]
@@ -571,10 +567,12 @@ class SakDbObject(object):
         if name.startswith("_") or (name in ["namespace", "key"]):
             return super().__getattribute__(name)
 
-        data = self.namespace.backend.read(self.key, name)
+        metadata_file = "meta"
+
+        data = self.namespace.backend.read(self.key, metadata_file)
 
         if data is None:
-            raise Exception(f"{self} has no attribute {name}.")
+            raise Exception(f"{self} has no attribute {metadata_file}.")
 
         if self.namespace.graph is None:
             raise Exception(
@@ -583,7 +581,7 @@ class SakDbObject(object):
 
         decoder = SakDbDecoder(self.namespace.graph)
 
-        type_field = data.get_by_key("_type")
+        type_field = data.get_by_key(f"_{name}:type")
         if type_field is None:
             raise Exception(f"Could not infere the type for {name}.")
 
@@ -592,7 +590,7 @@ class SakDbObject(object):
             tmp_list = []
 
             for field in data.fields:
-                if field.key.startswith("_"):
+                if not field.key.startswith(f"{name}:"):
                     continue
 
                 value = json.loads(field.payload, object_hook=decoder.object_hook)
@@ -605,11 +603,13 @@ class SakDbObject(object):
             tmp_dict: Dict[str, Any] = {}
 
             for field in data.fields:
-                if field.key.startswith("_"):
+                if not field.key.startswith(f"{name}:"):
                     continue
 
                 value = json.loads(field.payload, object_hook=decoder.object_hook)
-                tmp_dict[field.key] = value
+
+                _, field_key = field.key.split(":", 1)
+                tmp_dict[field_key] = value
             return SakDbDict(self, name, tmp_dict)
 
         else:
@@ -640,25 +640,45 @@ class SakDbObject(object):
             fields = []
 
             if isinstance(value, list):
-                fields.append(SakDbField(key="_type", payload="list"))
+                fields.append(SakDbField(key=f"_{name}:type", payload="list"))
 
                 for idx, ivalue in enumerate(value):
-                    payload_str = json.dumps(ivalue, default=encoder.default)
-                    fields.append(SakDbField(key=str(idx), payload=payload_str))
+                    payload_str = json.dumps(
+                        ivalue, default=encoder.default, separators=(",", ":")
+                    )
+                    fields.append(
+                        SakDbField(key=f"{name}:{str(idx)}", payload=payload_str)
+                    )
             elif isinstance(value, dict):
-                fields.append(SakDbField(key="_type", payload="dict"))
+                fields.append(SakDbField(key=f"_{name}:type", payload="dict"))
 
                 for ikey, ivalue in value.items():
-                    payload_str = json.dumps(ivalue, default=encoder.default)
-                    fields.append(SakDbField(key=ikey, payload=payload_str))
+                    payload_str = json.dumps(
+                        ivalue, default=encoder.default, separators=(",", ":")
+                    )
+                    fields.append(SakDbField(key=f"{name}:{ikey}", payload=payload_str))
             else:
-                fields.append(SakDbField(key="_type", payload=type(value).__name__))
+                fields.append(
+                    SakDbField(key=f"_{name}:type", payload=type(value).__name__)
+                )
 
-                payload_str = json.dumps(value, default=encoder.default)
+                payload_str = json.dumps(
+                    value, default=encoder.default, separators=(",", ":")
+                )
                 fields.append(SakDbField(key=name, payload=payload_str))
 
+            metadata_file = "meta"
             data = SakDbFields(*fields)
-            self.namespace.backend.write(self.key, name, data)
+
+            previous_data = self.namespace.backend.read(self.key, metadata_file)
+            if previous_data is not None:
+                previous_data.drop_by_key_prefix(f"_{name}:type")
+                previous_data.drop_by_key_prefix(f"{name}:")
+                new_data = merge(None, data, previous_data)
+            else:
+                new_data = data
+
+            self.namespace.backend.write(self.key, metadata_file, new_data)
         except Exception as e:
             raise (e)
 

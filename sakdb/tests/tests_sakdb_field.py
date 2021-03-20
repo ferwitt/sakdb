@@ -23,10 +23,10 @@ def test_dumps() -> None:
 
     # Then.
     assert data_str == (
-        '{"t": 1.0, "k": "0000000000000000000000000000000000000000",'
-        ' "c": "md5:3e25960a79dbc69b674cd4ec67a72c62"}'
+        '{"t":1.0,"k":"0000000000000000000000000000000000000000",'
+        '"c":"md5:3e25960a79dbc69b674cd4ec67a72c62"}'
         + PAYLOAD_SEPARATOR
-        + '"Hello world"'
+        + '"Hello world"\n'
     )
 
 
@@ -56,12 +56,12 @@ def test_loads() -> None:
 def test_merge_no_common_base() -> None:
 
     ours_data = (
-        '{"t": 1616074500.117626, "k": "name",'
-        ' "c": "md5:4d498457eff880b7aadb6e620344a8e3"} || "\\"helloWorld\\""'
+        '{"t":1616074500.117626,"k":"name",'
+        '"c": "md5:4d498457eff880b7aadb6e620344a8e3"}&"\\"helloWorld\\""'
     )
     theirs_data = (
-        '{"t": 1616074501.124153, "k": "name",'
-        ' "c": "md5:8dd9a71fdf86e9f8551294356894b569"} || "\\"fooBar\\""'
+        '{"t":1616074501.124153,"k":"name",'
+        '"c":"md5:8dd9a71fdf86e9f8551294356894b569"}&"\\"fooBar\\""'
     )
 
     ours = sakdb_loads(ours_data)

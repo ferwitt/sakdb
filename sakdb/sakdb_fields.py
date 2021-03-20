@@ -4,7 +4,7 @@ import json
 import uuid
 from typing import List, Optional
 
-PAYLOAD_SEPARATOR = " || "
+PAYLOAD_SEPARATOR = "&"
 
 
 def payload_md5(payload: str) -> str:
@@ -62,6 +62,10 @@ class SakDbFields:
             ret.append(field.key)
         return ret
 
+    def drop_by_key_prefix(self, key_prefix: str) -> None:
+        new_fields = [f for f in self.fields if not f.key.startswith(key_prefix)]
+        self.fields = new_fields
+
 
 def sakdb_loads(data: str) -> Optional[SakDbFields]:
     ret = None
@@ -94,13 +98,20 @@ def sakdb_dumps(data: SakDbFields) -> str:
     ret = []
 
     for field in data.fields:
-        ret.append(
-            json.dumps({"t": field.ts, "k": field.key, "c": field.crc})
-            + PAYLOAD_SEPARATOR
-            + json.dumps(field.payload)
+        header = json.dumps(
+            {"t": field.ts, "k": field.key, "c": field.crc}, separators=(",", ":")
         )
+        payload = json.dumps(field.payload, separators=(",", ":"))
 
-    return "\n".join(ret)
+        if PAYLOAD_SEPARATOR in header:
+            raise Exception(
+                f'It is not allowed to have the "{PAYLOAD_SEPARATOR}" in the header'
+            )
+
+        ret.append(header + PAYLOAD_SEPARATOR + payload)
+
+    # Add an extra new line to make the diffs easier.
+    return "\n".join(ret) + "\n"
 
 
 def merge(
