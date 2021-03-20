@@ -245,7 +245,7 @@ class SakDbNamespaceGit(SakDbNamespaceBackend):
 
         return ret
 
-    def _read(self, path: Path) -> Optional[str]:
+    def _read_blob(self, path: Path) -> Optional[pygit2.Object]:
         try:
             path_parts = path.parts
 
@@ -256,13 +256,22 @@ class SakDbNamespaceGit(SakDbNamespaceBackend):
             for ipath in path_parts:
                 current_node = current_node[ipath]
 
-            ret = current_node.data.decode("utf-8")
+            return current_node
+        except Exception:
+            # Exception("Could not read {path} in {self}.")
+            return None
+
+    def _read(self, path: Path) -> Optional[str]:
+        blob = self._read_blob(path)
+
+        if blob is not None:
+            ret = blob.data.decode("utf-8")
             if isinstance(ret, str):
                 return ret
             else:
                 return None
-        except Exception:
-            Exception("Could not read {path} in {self}.")
+        else:
+            # Exception("Could not read {path} in {self}.")
             return None
 
     def _read_sakdb(self, path: Path) -> Optional[SakDbFields]:
@@ -272,7 +281,7 @@ class SakDbNamespaceGit(SakDbNamespaceBackend):
         return sakdb_loads(value_str)
 
     def read(self, node_key: str, data_key: str) -> Optional[SakDbFields]:
-        node_path = Path("objects") / node_key[:2] / node_key
+        node_path = Path("objects") / node_key[0] / node_key[1] / node_key[2] / node_key
         data_path = node_path / data_key
         return self._read_sakdb(data_path)
 
@@ -281,19 +290,28 @@ class SakDbNamespaceGit(SakDbNamespaceBackend):
 
         tree = self.repo[ref].tree
 
-        index = pygit2.Index()
-        index.read_tree(tree)
-
         blob = self.repo.create_blob(value)
+
+        # Check if the blob is identical, then just return.
+        previous_blob = self._read_blob(path)
+        if previous_blob is not None:
+            if blob == previous_blob.oid:
+                return
+
         new_entry = pygit2.IndexEntry(str(path), blob, pygit2.GIT_FILEMODE_BLOB)
 
+        index = pygit2.Index()
+        index.read_tree(tree)
         index.add(new_entry)
 
         tid = index.write_tree(self.repo)
 
-        diff = tree.diff_to_tree(self.repo[tid])
+        # Old really slow way of comparing trees.
+        # diff = tree.diff_to_tree(self.repo[tid])
+        # if len(list(diff.deltas)):
 
-        if len(list(diff.deltas)):
+        # If the tree id is different, then commit it.
+        if tid != tree.id:
             # author = pygit2.Signature("a b", "a@b")
             author = self.repo.default_signature
             committer = author
@@ -322,7 +340,7 @@ class SakDbNamespaceGit(SakDbNamespaceBackend):
         self._write(path, value_str)
 
     def write(self, node_key: str, data_key: str, value: SakDbFields) -> None:
-        node_path = Path("objects") / node_key[:2] / node_key
+        node_path = Path("objects") / node_key[0] / node_key[1] / node_key[2] / node_key
         data_path = node_path / data_key
         self._write_sakdb(data_path, value)
 
