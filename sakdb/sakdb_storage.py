@@ -281,7 +281,14 @@ class SakDbNamespaceGit(SakDbNamespaceBackend):
         return sakdb_loads(value_str)
 
     def read(self, node_key: str, data_key: str) -> Optional[SakDbFields]:
-        node_path = Path("objects") / node_key[0] / node_key[1] / node_key[2] / node_key
+        node_path = (
+            Path("objects")
+            / node_key[0]
+            / node_key[1]
+            / node_key[2]
+            / node_key[3]
+            / node_key
+        )
         data_path = node_path / data_key
         return self._read_sakdb(data_path)
 
@@ -336,7 +343,14 @@ class SakDbNamespaceGit(SakDbNamespaceBackend):
         self._write(path, value_str)
 
     def write(self, node_key: str, data_key: str, value: SakDbFields) -> None:
-        node_path = Path("objects") / node_key[0] / node_key[1] / node_key[2] / node_key
+        node_path = (
+            Path("objects")
+            / node_key[0]
+            / node_key[1]
+            / node_key[2]
+            / node_key[3]
+            / node_key
+        )
         data_path = node_path / data_key
         self._write_sakdb(data_path, value)
 
