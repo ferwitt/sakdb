@@ -28,11 +28,7 @@ class SakDbGraph(object):
     def add_namepace(self, namespace: "SakDbNamespace") -> None:
         if not self.has_namespace_registered(namespace.name):
             self.namespaces[namespace.name] = namespace
-        namespace.set_graph(self)
-
-    def save(self) -> None:
-        for n in self.namespaces.values():
-            n.save()
+        namespace.register_graph(self)
 
     def get_object(self, key: str) -> Optional["SakDbObject"]:
         for n in self.namespaces.values():
@@ -56,9 +52,19 @@ class SakDbGraph(object):
         return ret
 
 
-class SakDbNamespaceBackend(object):
-    def __init__(self) -> None:
-        super(SakDbNamespaceBackend, self).__init__()
+class SakDbNamespace(object):
+    def __init__(self, name: str) -> None:
+        super(SakDbNamespace, self).__init__()
+        self.name = name
+
+        self.objects: Dict[str, "SakDbObject"] = {}
+
+        self.graph: Optional["SakDbGraph"] = None
+
+    def register_graph(self, graph: "SakDbGraph") -> None:
+        self.graph = graph
+        if not graph.has_namespace_registered(self.name):
+            graph.add_namepace(self)
 
     def set_metadata(self, key: str, value: Any) -> None:
         pass
@@ -75,11 +81,82 @@ class SakDbNamespaceBackend(object):
     def write(self, node_key: str, data_key: str, value: SakDbFields) -> None:
         pass
 
+    def _validate_version(self, version: str) -> bool:
+        # Extract the repository version components.
+        repo_version, _, _ = (int(v) for v in version.split("."))
 
-class SakDbNamespaceGit(SakDbNamespaceBackend):
-    def __init__(self, path: Path, ref: str = "refs/heads/master") -> None:
-        super(SakDbNamespaceGit, self).__init__()
+        # Extract the current software version components.
+        software_version, _, _ = (int(v) for v in VERSION.split("."))
 
+        # If the major version number is greater then the supported version.
+        if repo_version > software_version:
+            return False
+        return True
+
+    def get_object_keys(self) -> Set[str]:
+        # TODO: Use generators for this?
+        return set(self.objects.keys()) | set(self.node_keys())
+
+    def get_objects(self) -> List["SakDbObject"]:
+        ret = []
+        for key in self.get_object_keys():
+            ret.append(self.get_object(key))
+        return ret
+
+    def get_object(self, key: str) -> "SakDbObject":
+        # Check if there is already this key in the graph, then return it.
+        # Otherwise create this object in the Namespace and return it.
+        if key in self.objects:
+            return self.objects[key]
+
+        # TODO: How do I properly choose the class. The idea is to have a field informing the class
+        # of this object, then I instantiate this specific class.
+        cl_fields = self.read(key, "_cl")
+        if cl_fields is None:
+            raise Exception(f"Failed to read the class type for object {key}")
+
+        clname_fields = cl_fields.get_by_key("_cl")
+        if clname_fields is None:
+            raise Exception(
+                f"Failed to extract the class name from the DB for object {key}"
+            )
+        clname = clname_fields.payload
+
+        if self.graph is None:
+            raise Exception(f"No graph registered for namespace {self.name}!")
+        else:
+            cl = self.graph.get_class(clname)
+            if cl is None:
+                raise Exception(f"Class {clname} is not supported")
+            else:
+                obj = cl(self, key)
+
+                if not isinstance(obj, SakDbObject):
+                    raise Exception(
+                        f"Object {obj} should be an instance of SakDbObject"
+                    )
+
+                self.register_object(obj)
+                return obj
+
+    def has_object(self, key: str) -> bool:
+        try:
+            obj = self.get_object(key)
+        except Exception:
+            return False
+        return obj is not None
+
+    def register_object(self, obj: "SakDbObject") -> None:
+        if not self.has_object(obj.key):
+            self.objects[obj.key] = obj
+
+    def get_version(self) -> Optional[str]:
+        return self.get_metadata("version")
+
+
+class SakDbNamespaceGit(SakDbNamespace):
+    def __init__(self, name: str, path: Path, ref: str = "refs/heads/master") -> None:
+        super(SakDbNamespaceGit, self).__init__(name)
         self.repo = pygit2.init_repository(path, True)
         self.ref = ref
 
@@ -95,6 +172,20 @@ class SakDbNamespaceGit(SakDbNamespaceBackend):
             self.repo.create_commit(
                 self.ref, author, committer, commit_message, tid, []
             )
+
+        # TODO: Read the version and check if it is compatible with the current implementation
+        try:
+            version = self.get_metadata("version")
+        except Exception:
+            version = None
+
+        if version is not None:
+            if not self._validate_version(version):
+                raise Exception(
+                    f"Repo version ({version}) not supported, please update the system."
+                )
+        else:
+            self.set_metadata("version", VERSION)
 
     def add_remote(self, name: str, url: str) -> pygit2.remote.Remote:
         # TODO(witt): What is remote already exists?
@@ -205,7 +296,7 @@ class SakDbNamespaceGit(SakDbNamespaceBackend):
                 remote.fetch()
 
     def set_metadata(self, key: str, value: Any) -> None:
-        metada_path = Path("metadata") / key
+        metada_path = Path(self.name) / "metadata" / key
 
         encoder = SakDbEncoder()
         payload_str = json.dumps(value, default=encoder.default, separators=(",", ":"))
@@ -218,7 +309,7 @@ class SakDbNamespaceGit(SakDbNamespaceBackend):
         self._write_sakdb(metada_path, data)
 
     def get_metadata(self, key: str) -> Any:
-        metada_path = Path("metadata") / key
+        metada_path = Path(self.name) / "metadata" / key
 
         data = self._read_sakdb(metada_path)
         if data is None:
@@ -236,7 +327,7 @@ class SakDbNamespaceGit(SakDbNamespaceBackend):
         ret = []
 
         ref = self.repo.references[self.ref].target
-        tree = self.repo[ref].tree["objects"]
+        tree = self.repo[ref].tree / self.name / ["objects"]
         for obj in tree:
             # TODO: Use another way to check if it is a tree node.
             if obj.type_str == "tree":
@@ -282,7 +373,8 @@ class SakDbNamespaceGit(SakDbNamespaceBackend):
 
     def read(self, node_key: str, data_key: str) -> Optional[SakDbFields]:
         node_path = (
-            Path("objects")
+            Path(self.name)
+            / "objects"
             / node_key[0]
             / node_key[1]
             / node_key[2]
@@ -344,7 +436,8 @@ class SakDbNamespaceGit(SakDbNamespaceBackend):
 
     def write(self, node_key: str, data_key: str, value: SakDbFields) -> None:
         node_path = (
-            Path("objects")
+            Path(self.name)
+            / "objects"
             / node_key[0]
             / node_key[1]
             / node_key[2]
@@ -353,116 +446,6 @@ class SakDbNamespaceGit(SakDbNamespaceBackend):
         )
         data_path = node_path / data_key
         self._write_sakdb(data_path, value)
-
-
-class SakDbNamespace(object):
-    def __init__(
-        self, graph: SakDbGraph, name: str, backend: "SakDbNamespaceBackend"
-    ) -> None:
-        super(SakDbNamespace, self).__init__()
-        self.name = name
-
-        self.backend = backend
-
-        self.objects: Dict[str, "SakDbObject"] = {}
-
-        self.graph: Optional["SakDbGraph"] = None
-        graph.add_namepace(self)
-
-        # TODO: Read the version and check if it is compatible with the current implementation
-        try:
-            version = self.backend.get_metadata("version")
-        except Exception:
-            version = None
-
-        if version is not None:
-            if not self._validate_version(version):
-                raise Exception(
-                    f"Repo version ({version}) not supported, please update the system."
-                )
-        else:
-            self.backend.set_metadata("version", VERSION)
-
-    def _validate_version(self, version: str) -> bool:
-        # Extract the repository version components.
-        repo_version, _, _ = (int(v) for v in version.split("."))
-
-        # Extract the current software version components.
-        software_version, _, _ = (int(v) for v in VERSION.split("."))
-
-        # If the major version number is greater then the supported version.
-        if repo_version > software_version:
-            return False
-        return True
-
-    def get_object_keys(self) -> Set[str]:
-        # TODO: Use generators for this?
-        return set(self.objects.keys()) | set(self.backend.node_keys())
-
-    def get_objects(self) -> List["SakDbObject"]:
-        ret = []
-        for key in self.get_object_keys():
-            ret.append(self.get_object(key))
-        return ret
-
-    def save(self) -> None:
-        for obj in self.objects.values():
-            obj.save()
-
-    def set_graph(self, graph: SakDbGraph) -> None:
-        self.graph = graph
-        if not graph.has_namespace_registered(self.name):
-            graph.add_namepace(self)
-
-    def get_object(self, key: str) -> "SakDbObject":
-        # Check if there is already this key in the graph, then return it.
-        # Otherwise create this object in the Namespace and return it.
-        if key in self.objects:
-            return self.objects[key]
-
-        # TODO: How do I properly choose the class. The idea is to have a field informing the class
-        # of this object, then I instantiate this specific class.
-        cl_fields = self.backend.read(key, "_cl")
-        if cl_fields is None:
-            raise Exception(f"Failed to read the class type for object {key}")
-
-        clname_fields = cl_fields.get_by_key("_cl")
-        if clname_fields is None:
-            raise Exception(
-                f"Failed to extract the class name from the DB for object {key}"
-            )
-        clname = clname_fields.payload
-
-        if self.graph is None:
-            raise Exception(f"No graph registered for namespace {self.name}!")
-        else:
-            cl = self.graph.get_class(clname)
-            if cl is None:
-                raise Exception(f"Class {clname} is not supported")
-            else:
-                obj = cl(self, key)
-
-                if not isinstance(obj, SakDbObject):
-                    raise Exception(
-                        f"Object {obj} should be an instance of SakDbObject"
-                    )
-
-                self.register_object(obj)
-                return obj
-
-    def has_object(self, key: str) -> bool:
-        try:
-            obj = self.get_object(key)
-        except Exception:
-            return False
-        return obj is not None
-
-    def register_object(self, obj: "SakDbObject") -> None:
-        if not self.has_object(obj.key):
-            self.objects[obj.key] = obj
-
-    def get_version(self) -> Optional[str]:
-        return self.backend.get_metadata("version")
 
 
 class SakDbEncoder(json.JSONEncoder):
@@ -575,7 +558,7 @@ class SakDbObject(object):
     def _save(self) -> None:
         cl_fields = SakDbFields(SakDbField(key="_cl", payload=type(self).__name__))
 
-        self.namespace.backend.write(self.key, "_cl", cl_fields)
+        self.namespace.write(self.key, "_cl", cl_fields)
 
     def __getattribute__(self, name: str) -> Any:
         if name.startswith("_") or (name in ["namespace", "key"]):
@@ -583,7 +566,7 @@ class SakDbObject(object):
 
         metadata_file = "meta"
 
-        data = self.namespace.backend.read(self.key, metadata_file)
+        data = self.namespace.read(self.key, metadata_file)
 
         if data is None:
             raise Exception(f"{self} has no attribute {metadata_file}.")
@@ -684,7 +667,7 @@ class SakDbObject(object):
             metadata_file = "meta"
             data = SakDbFields(*fields)
 
-            previous_data = self.namespace.backend.read(self.key, metadata_file)
+            previous_data = self.namespace.read(self.key, metadata_file)
             if previous_data is not None:
                 previous_data.drop_by_key_prefix(f"_{name}:type")
                 previous_data.drop_by_key_prefix(f"{name}:")
@@ -692,7 +675,7 @@ class SakDbObject(object):
             else:
                 new_data = data
 
-            self.namespace.backend.write(self.key, metadata_file, new_data)
+            self.namespace.write(self.key, metadata_file, new_data)
         except Exception as e:
             raise (e)
 

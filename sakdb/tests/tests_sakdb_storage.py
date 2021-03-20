@@ -3,13 +3,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List
 
-from sakdb.sakdb_storage import (
-    VERSION,
-    SakDbGraph,
-    SakDbNamespace,
-    SakDbNamespaceGit,
-    SakDbObject,
-)
+from sakdb.sakdb_storage import VERSION, SakDbGraph, SakDbNamespaceGit, SakDbObject
 
 
 class DBObjectInt(SakDbObject):
@@ -43,11 +37,11 @@ def test_create_repository() -> None:
 
         # When.
         g = SakDbGraph()
-        nw = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
-        SakDbNamespace(g, "data", nw)
+        n = SakDbNamespaceGit("data", Path(tmpdirname), "refs/heads/master")
+        n.register_graph(g)
 
         # Then.
-        assert nw.repo.is_bare is True
+        assert n.repo.is_bare is True
 
 
 def test_already_created_repository() -> None:
@@ -57,19 +51,19 @@ def test_already_created_repository() -> None:
 
         # When.
         g = SakDbGraph()
-        nw = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
-        SakDbNamespace(g, "data", nw)
+        n = SakDbNamespaceGit("data", Path(tmpdirname), "refs/heads/master")
+        n.register_graph(g)
 
         # Then.
-        assert nw.repo.is_bare is False
+        assert n.repo.is_bare is False
 
 
 def test_repository_version() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
         g = SakDbGraph()
-        nw = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
-        n = SakDbNamespace(g, "data", nw)
+        n = SakDbNamespaceGit("data", Path(tmpdirname), "refs/heads/master")
+        n.register_graph(g)
 
         # When.
         version = n.get_version()
@@ -82,8 +76,8 @@ def test_repository_version_compatibility() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
         g = SakDbGraph()
-        nw = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
-        n = SakDbNamespace(g, "data", nw)
+        n = SakDbNamespaceGit("data", Path(tmpdirname), "refs/heads/master")
+        n.register_graph(g)
 
         # When.
         ret1 = n._validate_version(
@@ -104,8 +98,9 @@ def test_int_increment() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
         g_a = SakDbGraph()
-        nw_a = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
-        n_a = SakDbNamespace(g_a, "data", nw_a)
+        n_a = SakDbNamespaceGit("data", Path(tmpdirname), "refs/heads/master")
+        n_a.register_graph(g_a)
+
         g_a.register_class(DBObjectInt)
 
         a = DBObjectInt(n_a, my_int=42)
@@ -122,16 +117,18 @@ def test_write_a_read_b_int() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
         g_a = SakDbGraph()
-        nw_a = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
-        n_a = SakDbNamespace(g_a, "data", nw_a)
+        n_a = SakDbNamespaceGit("data", Path(tmpdirname), "refs/heads/master")
+        n_a.register_graph(g_a)
+
         g_a.register_class(DBObjectInt)
 
         a = DBObjectInt(n_a, my_int=42)
 
         # When.
         g_b = SakDbGraph()
-        nw_b = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
-        n_b = SakDbNamespace(g_b, "data", nw_b)
+        n_b = SakDbNamespaceGit("data", Path(tmpdirname), "refs/heads/master")
+        n_b.register_graph(g_b)
+
         g_b.register_class(DBObjectInt)
 
         b = DBObjectInt(n_b, a.key)
@@ -145,16 +142,18 @@ def test_write_a_read_b_string() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
         g_a = SakDbGraph()
-        nw_a = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
-        n_a = SakDbNamespace(g_a, "data", nw_a)
+        n_a = SakDbNamespaceGit("data", Path(tmpdirname), "refs/heads/master")
+        n_a.register_graph(g_a)
+
         g_a.register_class(DBObjectString)
 
         a = DBObjectString(n_a, my_string="helloWorld")
 
         # When.
         g_b = SakDbGraph()
-        nw_b = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
-        n_b = SakDbNamespace(g_b, "data", nw_b)
+        n_b = SakDbNamespaceGit("data", Path(tmpdirname), "refs/heads/master")
+        n_b.register_graph(g_b)
+
         g_b.register_class(DBObjectString)
 
         b = DBObjectString(n_b, a.key)
@@ -168,8 +167,9 @@ def test_string_append() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
         g_a = SakDbGraph()
-        nw_a = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
-        n_a = SakDbNamespace(g_a, "data", nw_a)
+        n_a = SakDbNamespaceGit("data", Path(tmpdirname), "refs/heads/master")
+        n_a.register_graph(g_a)
+
         g_a.register_class(DBObjectString)
 
         a = DBObjectString(n_a, my_string="helloWorld")
@@ -186,16 +186,18 @@ def test_wrwite_a_read_b_list() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
         g_a = SakDbGraph()
-        nw_a = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
-        n_a = SakDbNamespace(g_a, "data", nw_a)
+        n_a = SakDbNamespaceGit("data", Path(tmpdirname), "refs/heads/master")
+        n_a.register_graph(g_a)
+
         g_a.register_class(DBObjectList)
 
         a = DBObjectList(n_a, my_list=[2, 3, 1, 5])
 
         # When.
         g_b = SakDbGraph()
-        nw_b = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
-        n_b = SakDbNamespace(g_b, "data", nw_b)
+        n_b = SakDbNamespaceGit("data", Path(tmpdirname), "refs/heads/master")
+        n_b.register_graph(g_b)
+
         g_b.register_class(DBObjectList)
 
         b = DBObjectList(n_b, a.key)
@@ -218,8 +220,9 @@ def test_list_editions() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
         g_a = SakDbGraph()
-        nw_a = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
-        n_a = SakDbNamespace(g_a, "data", nw_a)
+        n_a = SakDbNamespaceGit("data", Path(tmpdirname), "refs/heads/master")
+        n_a.register_graph(g_a)
+
         g_a.register_class(DBObjectList)
 
         a = DBObjectList(n_a, my_list=[2, 3, 1, 5])
@@ -269,16 +272,18 @@ def test_write_a_read_b_dict() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
         g_a = SakDbGraph()
-        nw_a = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
-        n_a = SakDbNamespace(g_a, "data", nw_a)
+        n_a = SakDbNamespaceGit("data", Path(tmpdirname), "refs/heads/master")
+        n_a.register_graph(g_a)
+
         g_a.register_class(DBObjectDict)
 
         a = DBObjectDict(n_a, my_dict={"foo": 1, "bar": "hey"})
 
         # When.
         g_b = SakDbGraph()
-        nw_b = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
-        n_b = SakDbNamespace(g_b, "data", nw_b)
+        n_b = SakDbNamespaceGit("data", Path(tmpdirname), "refs/heads/master")
+        n_b.register_graph(g_b)
+
         g_b.register_class(DBObjectDict)
 
         b = DBObjectDict(n_b, a.key)
@@ -297,8 +302,9 @@ def test_dict_edit() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
         g_a = SakDbGraph()
-        nw_a = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
-        n_a = SakDbNamespace(g_a, "data", nw_a)
+        n_a = SakDbNamespaceGit("data", Path(tmpdirname), "refs/heads/master")
+        n_a.register_graph(g_a)
+
         g_a.register_class(DBObjectDict)
 
         a = DBObjectDict(n_a, my_dict={"foo": 1, "bar": "hey"})
@@ -338,8 +344,9 @@ def test_list_pop_middle() -> None:
     # Given.
     with tempfile.TemporaryDirectory() as tmpdirname:
         g_a = SakDbGraph()
-        nw_a = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
-        n_a = SakDbNamespace(g_a, "data", nw_a)
+        n_a = SakDbNamespaceGit("data", Path(tmpdirname), "refs/heads/master")
+        n_a.register_graph(g_a)
+
         g_a.register_class(DBObjectList)
 
         a = DBObjectList(n_a, my_list=[2, 3, 1, 5])
@@ -352,8 +359,6 @@ def test_list_pop_middle() -> None:
         # When.
         a.my_list.pop(2)
 
-        # import pdb; pdb.set_trace()
-
         # Then.
         assert a.my_list[0] == 2
         assert a.my_list[1] == 3
@@ -362,8 +367,9 @@ def test_list_pop_middle() -> None:
 
         # When.
         g_b = SakDbGraph()
-        nw_b = SakDbNamespaceGit(Path(tmpdirname), "refs/heads/master")
-        n_b = SakDbNamespace(g_b, "data", nw_b)
+        n_b = SakDbNamespaceGit("data", Path(tmpdirname), "refs/heads/master")
+        n_b.register_graph(g_b)
+
         g_b.register_class(DBObjectList)
 
         b = DBObjectList(n_b, a.key)
@@ -385,23 +391,25 @@ def test_sync_string() -> None:
         dirB.mkdir()
 
         g_a = SakDbGraph()
-        nw_a = SakDbNamespaceGit(Path(dirA), "refs/heads/master")
-        n_a = SakDbNamespace(g_a, "data", nw_a)
+        n_a = SakDbNamespaceGit("data", Path(dirA), "refs/heads/master")
+        n_a.register_graph(g_a)
+
         g_a.register_class(DBObjectString)
 
         a = DBObjectString(n_a, my_string="helloWorld")
 
         g_b = SakDbGraph()
-        nw_b = SakDbNamespaceGit(Path(dirB), "refs/heads/master")
-        n_b = SakDbNamespace(g_b, "data", nw_b)
+        n_b = SakDbNamespaceGit("data", Path(dirB), "refs/heads/master")
+        n_b.register_graph(g_b)
+
         g_b.register_class(DBObjectString)
 
         # When
-        nw_a.add_remote("origin", str(dirB))
-        nw_b.add_remote("origin", str(dirA))
+        n_a.add_remote("origin", str(dirB))
+        n_b.add_remote("origin", str(dirA))
 
-        nw_a.sync()
-        nw_b.sync()
+        n_a.sync()
+        n_b.sync()
 
         b = DBObjectString(n_b, a.key)
 
@@ -420,23 +428,25 @@ def test_sync_list() -> None:
         dirB.mkdir()
 
         g_a = SakDbGraph()
-        nw_a = SakDbNamespaceGit(Path(dirA), "refs/heads/master")
-        n_a = SakDbNamespace(g_a, "data", nw_a)
+        n_a = SakDbNamespaceGit("data", Path(dirA), "refs/heads/master")
+        n_a.register_graph(g_a)
+
         g_a.register_class(DBObjectList)
 
         a = DBObjectList(n_a, my_list=[2, 1, 3])
 
         g_b = SakDbGraph()
-        nw_b = SakDbNamespaceGit(Path(dirB), "refs/heads/master")
-        n_b = SakDbNamespace(g_b, "data", nw_b)
+        n_b = SakDbNamespaceGit("data", Path(dirB), "refs/heads/master")
+        n_b.register_graph(g_b)
+
         g_b.register_class(DBObjectList)
 
         # When
-        nw_a.add_remote("origin", str(dirB))
-        nw_b.add_remote("origin", str(dirA))
+        n_a.add_remote("origin", str(dirB))
+        n_b.add_remote("origin", str(dirA))
 
-        nw_a.sync()
-        nw_b.sync()
+        n_a.sync()
+        n_b.sync()
 
         b = DBObjectList(n_b, a.key)
 
@@ -461,23 +471,24 @@ def test_sync_dict() -> None:
         dirB.mkdir()
 
         g_a = SakDbGraph()
-        nw_a = SakDbNamespaceGit(Path(dirA), "refs/heads/master")
-        n_a = SakDbNamespace(g_a, "data", nw_a)
+        n_a = SakDbNamespaceGit("data", Path(dirA), "refs/heads/master")
+        n_a.register_graph(g_a)
+
         g_a.register_class(DBObjectDict)
 
         a = DBObjectDict(n_a, my_dict={"foo": 1, "bar": "hey"})
 
         g_b = SakDbGraph()
-        nw_b = SakDbNamespaceGit(Path(dirB), "refs/heads/master")
-        n_b = SakDbNamespace(g_b, "data", nw_b)
+        n_b = SakDbNamespaceGit("data", Path(dirB), "refs/heads/master")
+        n_b.register_graph(g_b)
         g_b.register_class(DBObjectDict)
 
         # When
-        nw_a.add_remote("origin", str(dirB))
-        nw_b.add_remote("origin", str(dirA))
+        n_a.add_remote("origin", str(dirB))
+        n_b.add_remote("origin", str(dirA))
 
-        nw_a.sync()
-        nw_b.sync()
+        n_a.sync()
+        n_b.sync()
 
         b = DBObjectDict(n_b, a.key)
 
@@ -502,8 +513,8 @@ def test_sync_with_git_command_no_common_base() -> None:
 
         # Add object in first repo with my_string "helloWorld"
         g_a = SakDbGraph()
-        nw_a = SakDbNamespaceGit(Path(dirA), "refs/heads/master")
-        n_a = SakDbNamespace(g_a, "data", nw_a)
+        n_a = SakDbNamespaceGit("data", Path(dirA), "refs/heads/master")
+        n_a.register_graph(g_a)
         g_a.register_class(DBObjectString)
 
         a = DBObjectString(n_a, my_string="helloWorld")
@@ -511,8 +522,9 @@ def test_sync_with_git_command_no_common_base() -> None:
 
         # Add the same object/key in another object with my_string "fooBar".
         g_b = SakDbGraph()
-        nw_b = SakDbNamespaceGit(Path(dirB), "refs/heads/master")
-        n_b = SakDbNamespace(g_b, "data", nw_b)
+        n_b = SakDbNamespaceGit("data", Path(dirB), "refs/heads/master")
+        n_b.register_graph(g_b)
+
         g_b.register_class(DBObjectString)
 
         b = DBObjectString(n_b, a.key, my_string="fooBar")
@@ -521,13 +533,13 @@ def test_sync_with_git_command_no_common_base() -> None:
         # When
 
         # Link the repositories with remotes.
-        nw_a.add_remote("origin", str(dirB))
-        nw_b.add_remote("origin", str(dirA))
+        n_a.add_remote("origin", str(dirB))
+        n_b.add_remote("origin", str(dirA))
 
         # Sync the repositories. The repo A is supposed to have trhe value from repo B now.
-        nw_a.sync()
-        nw_b.sync()
-        nw_a.sync()
+        n_a.sync()
+        n_b.sync()
+        n_a.sync()
 
         # Then.
         assert a.my_string == "fooBar"
@@ -545,8 +557,8 @@ def test_sync_list_with_git_command_no_common_base() -> None:
 
         # Add object in first repo with my_list "helloWorld"
         g_a = SakDbGraph()
-        nw_a = SakDbNamespaceGit(Path(dirA), "refs/heads/master")
-        n_a = SakDbNamespace(g_a, "data", nw_a)
+        n_a = SakDbNamespaceGit("data", Path(dirA), "refs/heads/master")
+        n_a.register_graph(g_a)
         g_a.register_class(DBObjectList)
 
         a = DBObjectList(n_a, my_list=[2, 1, 3])
@@ -557,8 +569,8 @@ def test_sync_list_with_git_command_no_common_base() -> None:
 
         # Add the same object/key in another object with my_list "fooBar".
         g_b = SakDbGraph()
-        nw_b = SakDbNamespaceGit(Path(dirB), "refs/heads/master")
-        n_b = SakDbNamespace(g_b, "data", nw_b)
+        n_b = SakDbNamespaceGit("data", Path(dirB), "refs/heads/master")
+        n_b.register_graph(g_b)
         g_b.register_class(DBObjectList)
 
         b = DBObjectList(n_b, a.key, my_list=[5, 4, 6, 10])
@@ -571,14 +583,14 @@ def test_sync_list_with_git_command_no_common_base() -> None:
         # When
 
         # Link the repositories with remotes.
-        nw_a.add_remote("origin", str(dirB))
-        nw_b.add_remote("origin", str(dirA))
+        n_a.add_remote("origin", str(dirB))
+        n_b.add_remote("origin", str(dirA))
 
         # Sync the repositories. The repo A is supposed to have trhe value from repo B now.
-        nw_a.sync()
-        nw_b.sync()
-        nw_a.sync()
-        nw_b.sync()
+        n_a.sync()
+        n_b.sync()
+        n_a.sync()
+        n_b.sync()
 
         # Then.
         assert a.my_list[0] == 5
@@ -605,8 +617,8 @@ def test_sync_dict_with_git_command_no_common_base() -> None:
 
         # Add object in first repo with my_dict "helloWorld"
         g_a = SakDbGraph()
-        nw_a = SakDbNamespaceGit(Path(dirA), "refs/heads/master")
-        n_a = SakDbNamespace(g_a, "data", nw_a)
+        n_a = SakDbNamespaceGit("data", Path(dirA), "refs/heads/master")
+        n_a.register_graph(g_a)
         g_a.register_class(DBObjectDict)
 
         a = DBObjectDict(n_a, my_dict={"foo": 1, "bar": "hey"})
@@ -616,8 +628,8 @@ def test_sync_dict_with_git_command_no_common_base() -> None:
 
         # Add the same object/key in another object with my_dict "fooBar".
         g_b = SakDbGraph()
-        nw_b = SakDbNamespaceGit(Path(dirB), "refs/heads/master")
-        n_b = SakDbNamespace(g_b, "data", nw_b)
+        n_b = SakDbNamespaceGit("data", Path(dirB), "refs/heads/master")
+        n_b.register_graph(g_b)
         g_b.register_class(DBObjectDict)
 
         b = DBObjectDict(n_b, a.key, my_dict={"foo": 2, "hello": "world"})
@@ -628,14 +640,14 @@ def test_sync_dict_with_git_command_no_common_base() -> None:
         # When
 
         # Link the repositories with remotes.
-        nw_a.add_remote("origin", str(dirB))
-        nw_b.add_remote("origin", str(dirA))
+        n_a.add_remote("origin", str(dirB))
+        n_b.add_remote("origin", str(dirA))
 
         # Sync the repositories. The repo A is supposed to have trhe value from repo B now.
-        nw_a.sync()
-        nw_b.sync()
-        nw_a.sync()
-        nw_b.sync()
+        n_a.sync()
+        n_b.sync()
+        n_a.sync()
+        n_b.sync()
 
         # Then.
         assert a.my_dict["foo"] == 2
@@ -660,8 +672,8 @@ def test_sync_with_git_command_common_base() -> None:
 
         # Add object in first repo with my_string "helloWorld"
         g_a = SakDbGraph()
-        nw_a = SakDbNamespaceGit(Path(dirA), "refs/heads/master")
-        n_a = SakDbNamespace(g_a, "data", nw_a)
+        n_a = SakDbNamespaceGit("data", Path(dirA), "refs/heads/master")
+        n_a.register_graph(g_a)
         g_a.register_class(DBObjectString)
 
         a = DBObjectString(n_a, my_string="helloWorld")
@@ -669,17 +681,17 @@ def test_sync_with_git_command_common_base() -> None:
 
         # Add the same object/key in another object with my_string "fooBar".
         g_b = SakDbGraph()
-        nw_b = SakDbNamespaceGit(Path(dirB), "refs/heads/master")
-        n_b = SakDbNamespace(g_b, "data", nw_b)
+        n_b = SakDbNamespaceGit("data", Path(dirB), "refs/heads/master")
+        n_b.register_graph(g_b)
         g_b.register_class(DBObjectString)
 
         # Link the repositories with remotes.
-        nw_a.add_remote("origin", str(dirB))
-        nw_b.add_remote("origin", str(dirA))
-        nw_a.sync()
-        nw_b.sync()
-        nw_a.sync()
-        nw_b.sync()
+        n_a.add_remote("origin", str(dirB))
+        n_b.add_remote("origin", str(dirA))
+        n_a.sync()
+        n_b.sync()
+        n_a.sync()
+        n_b.sync()
 
         b = DBObjectString(n_b, a.key)
         assert b.my_string == "helloWorld"
@@ -689,10 +701,10 @@ def test_sync_with_git_command_common_base() -> None:
         b.my_string = "changedB"
 
         # Sync the repositories. The repo A is supposed to have trhe value from repo B now.
-        nw_a.sync()
-        nw_b.sync()
-        nw_a.sync()
-        nw_b.sync()
+        n_a.sync()
+        n_b.sync()
+        n_a.sync()
+        n_b.sync()
 
         # Then.
         assert a.my_string == "changedB"
@@ -710,8 +722,8 @@ def test_sync_list_with_git_command_common_base() -> None:
 
         # Add object in first repo with my_list "helloWorld"
         g_a = SakDbGraph()
-        nw_a = SakDbNamespaceGit(Path(dirA), "refs/heads/master")
-        n_a = SakDbNamespace(g_a, "data", nw_a)
+        n_a = SakDbNamespaceGit("data", Path(dirA), "refs/heads/master")
+        n_a.register_graph(g_a)
         g_a.register_class(DBObjectString)
 
         a = DBObjectString(n_a, my_list=[2, 1, 3])
@@ -722,17 +734,17 @@ def test_sync_list_with_git_command_common_base() -> None:
 
         # Add the same object/key in another object with my_list "fooBar".
         g_b = SakDbGraph()
-        nw_b = SakDbNamespaceGit(Path(dirB), "refs/heads/master")
-        n_b = SakDbNamespace(g_b, "data", nw_b)
+        n_b = SakDbNamespaceGit("data", Path(dirB), "refs/heads/master")
+        n_b.register_graph(g_b)
         g_b.register_class(DBObjectString)
 
         # When - Link the repositories with remotes.
-        nw_a.add_remote("origin", str(dirB))
-        nw_b.add_remote("origin", str(dirA))
-        nw_a.sync()
-        nw_b.sync()
-        nw_a.sync()
-        nw_b.sync()
+        n_a.add_remote("origin", str(dirB))
+        n_b.add_remote("origin", str(dirA))
+        n_a.sync()
+        n_b.sync()
+        n_a.sync()
+        n_b.sync()
 
         # Then.
         b = DBObjectList(n_b, a.key)
@@ -753,10 +765,10 @@ def test_sync_list_with_git_command_common_base() -> None:
         assert len(b.my_list) == 2
 
         # When - Sync the repositories. The repo A is supposed to have trhe value from repo B now.
-        nw_a.sync()
-        nw_b.sync()
-        nw_a.sync()
-        nw_b.sync()
+        n_a.sync()
+        n_b.sync()
+        n_a.sync()
+        n_b.sync()
 
         # Then.
         assert a.my_list[0] == 1
@@ -782,10 +794,10 @@ def test_sync_list_with_git_command_common_base() -> None:
         assert len(b.my_list) == 2
 
         # When - Sync the repositories. The repo A is supposed to have trhe value from repo B now.
-        nw_a.sync()
-        nw_b.sync()
-        nw_a.sync()
-        nw_b.sync()
+        n_a.sync()
+        n_b.sync()
+        n_a.sync()
+        n_b.sync()
 
         # Then.
         assert a.my_list[0] == 11
@@ -810,8 +822,8 @@ def test_sync_dict_with_git_command_common_base() -> None:
 
         # Add object in first repo with my_dict "helloWorld"
         g_a = SakDbGraph()
-        nw_a = SakDbNamespaceGit(Path(dirA), "refs/heads/master")
-        n_a = SakDbNamespace(g_a, "data", nw_a)
+        n_a = SakDbNamespaceGit("data", Path(dirA), "refs/heads/master")
+        n_a.register_graph(g_a)
         g_a.register_class(DBObjectDict)
 
         a = DBObjectDict(n_a, my_dict={"foo": 1, "bar": "hey"})
@@ -821,22 +833,22 @@ def test_sync_dict_with_git_command_common_base() -> None:
 
         # Add the same object/key in another object with my_dict "fooBar".
         g_b = SakDbGraph()
-        nw_b = SakDbNamespaceGit(Path(dirB), "refs/heads/master")
-        n_b = SakDbNamespace(g_b, "data", nw_b)
+        n_b = SakDbNamespaceGit("data", Path(dirB), "refs/heads/master")
+        n_b.register_graph(g_b)
         g_b.register_class(DBObjectDict)
 
         b = DBObjectDict(n_b, a.key)
 
         # When
         # Link the repositories with remotes.
-        nw_a.add_remote("origin", str(dirB))
-        nw_b.add_remote("origin", str(dirA))
+        n_a.add_remote("origin", str(dirB))
+        n_b.add_remote("origin", str(dirA))
 
         # Sync the repositories. The repo A is supposed to have trhe value from repo B now.
-        nw_a.sync()
-        nw_b.sync()
-        nw_a.sync()
-        nw_b.sync()
+        n_a.sync()
+        n_b.sync()
+        n_a.sync()
+        n_b.sync()
 
         # Then.
         assert b.my_dict["foo"] == 1
@@ -847,10 +859,10 @@ def test_sync_dict_with_git_command_common_base() -> None:
         a.my_dict = {"foo": 2, "hello": "world"}
         b.my_dict = {"foo": 3}
 
-        nw_a.sync()
-        nw_b.sync()
-        nw_a.sync()
-        nw_b.sync()
+        n_a.sync()
+        n_b.sync()
+        n_a.sync()
+        n_b.sync()
 
         # Then.
         assert a.my_dict["foo"] == 3
