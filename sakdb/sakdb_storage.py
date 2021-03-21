@@ -19,7 +19,7 @@ import pygit2
 
 from sakdb.sakdb_fields import SakDbField, SakDbFields, merge, sakdb_dumps, sakdb_loads
 
-VERSION = "0.0.1"
+VERSION = "0.1.0"
 
 _T = TypeVar("_T")
 _KT = TypeVar("_KT")

@@ -46,7 +46,7 @@ class SakDbBuild(build_ext):
 
 setup(
     name="sakdb",
-    version="0.0.1",
+    version="0.1.0",
     ext_modules=[SakDbExtension("sakdb")],
     cmdclass=dict(build_ext=SakDbBuild),
     install_requires=["pygit2"],
