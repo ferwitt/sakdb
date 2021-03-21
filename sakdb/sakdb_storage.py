@@ -868,27 +868,15 @@ class SakDbObject(object):
 
         self.namespace.write(self.key, "_cl", cl_fields)
 
-    def __getattribute__(self, name: str) -> Any:
-        if name.startswith("_") or (name in ["namespace", "key"]):
-            return super().__getattribute__(name)
-
-        metadata_file = "meta"
-
-        data = self.namespace.read(self.key, metadata_file)
-
-        if data is None:
-            raise Exception(f"{self} has no attribute {metadata_file}.")
-
-        if self.namespace.graph is None:
-            raise Exception(
-                f"Namespace {self.namespace.name} must be attached to a graph."
-            )
-
-        decoder = SakDbDecoder(self.namespace.graph)
+    def __internal_getattribute__(
+        self, name: str, data: SakDbFields, graph: SakDbGraph
+    ) -> Any:
+        decoder = SakDbDecoder(graph)
 
         type_field = data.get_by_key(f"_{name}:type")
         if type_field is None:
             raise Exception(f"Could not infere the type for {name}.")
+            return None
 
         if type_field.payload == "list":
             # If the type is a list.
@@ -923,9 +911,36 @@ class SakDbObject(object):
 
             if object_field is None:
                 raise Exception(f"No attribute {name} for {self}.")
+                return None
 
             value = json.loads(object_field.payload, object_hook=decoder.object_hook)
             return value
+
+    def __getattribute__(self, name: str) -> Any:
+        if name.startswith("_") or (name in ["namespace", "key"]):
+            return super().__getattribute__(name)
+
+        metadata_file = "meta"
+
+        data = self.namespace.read(self.key, metadata_file)
+
+        if data is None:
+            raise Exception(f"{self} has no attribute {metadata_file}.")
+
+        if self.namespace.graph is None:
+            raise Exception(
+                f"Namespace {self.namespace.name} must be attached to a graph."
+            )
+
+        try:
+            return self.__internal_getattribute__(name, data, self.namespace.graph)
+        except Exception:
+            # Try to get the default value, if it exists stores it and call getattribute again.
+            ret = super(SakDbObject, self).__getattribute__(name)
+            if self.namespace.graph.current_session is None:
+                with self.namespace.graph.session(msg="Set default"):
+                    self.__setattr__(name, ret)
+            return self.__getattribute__(name)
 
     def __setattr__(self, name: str, value: Any) -> None:
         if name.startswith("_") or (name in ["namespace", "key"]):
@@ -977,6 +992,7 @@ class SakDbObject(object):
 
             previous_data = self.namespace.read(self.key, metadata_file)
             if previous_data is not None:
+                # TODO(witt): Maybe it is not necessary to drop the _{name}:type.
                 previous_data.drop_by_key_prefix(f"_{name}:type")
                 previous_data.drop_by_key_prefix(f"{name}:")
                 new_data = merge(None, data, previous_data)
