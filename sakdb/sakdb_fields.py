@@ -40,7 +40,6 @@ class SakDbField:
         if crc is not None:
             self.crc = crc
         else:
-            # TODO: Compute this crc using the payload
             self.crc = payload_md5(payload)
 
 
