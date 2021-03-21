@@ -21,7 +21,7 @@ For instance, you can check those talks available on YouTube:
 The following example how a simple TODO List program that synchronizes between two different
 database instances.
 
-```
+```python
 from pathlib import Path
 from typing import List
 
@@ -87,7 +87,17 @@ if todo2:
 
 # Installation
 
-TODO
+It can be installed using the pip/pipenv command.
+
+```bash
+pipenv install git+https://github.com/ferwitt/sakdb#egg=sakdb
+```
+
+or
+
+```bash
+pip install git+https://github.com/ferwitt/sakdb#egg=sakdb
+```
 
 # Roadmap
 
