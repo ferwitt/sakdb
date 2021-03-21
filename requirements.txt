@@ -1,0 +1,8 @@
+pygit2
+mypy
+black
+flake8
+darglint
+pytest
+isort
+autoflake
