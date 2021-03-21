@@ -567,14 +567,21 @@ class SakDbNamespaceGit(SakDbNamespace):
 
     def node_keys(self) -> List[str]:
         # TODO: This should be a generator.
-        ret = []
+        ret: List[str] = []
 
         namespace_ref = self.repo.references[self.namespace_ref].target
-        tree = self.repo[namespace_ref].tree / self.name / ["objects"]
+        tree = self.repo[namespace_ref].tree[self.name]
+        if "objects" not in tree:
+            return ret
+
+        tree = tree["objects"]
         for obj in tree:
             if obj.type_str == "tree":
                 for obj2 in self.repo[obj.id]:
-                    ret.append(obj2.name)
+                    for obj3 in self.repo[obj2.id]:
+                        for obj4 in self.repo[obj3.id]:
+                            for obj5 in self.repo[obj4.id]:
+                                ret.append(obj5.name)
 
         return ret
 
