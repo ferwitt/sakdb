@@ -1,5 +1,8 @@
 # SakDB
 
+[![StaticAnalysis](https://github.com/ferwitt/sakdb/actions/workflows/static_analisys.yml/badge.svg)](https://github.com/ferwitt/sakdb/actions/workflows/static_analisys.yml)
+[![Test](https://github.com/ferwitt/sakdb/actions/workflows/test.yml/badge.svg)](https://github.com/ferwitt/sakdb/actions/workflows/test.yml)
+
 This is a simple python database running on top of Git.
 
 The goal is to achieve a minimalist distributed database with version control and data replication.
