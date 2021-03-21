@@ -199,7 +199,7 @@ class SakDbNamespace(object):
         super(SakDbNamespace, self).__init__()
         self.name = name
 
-        self.objects: Dict[str, "SakDbObject"] = {}
+        self.objects: Dict[str, Optional["SakDbObject"]] = {}
 
         self.graph: Optional["SakDbGraph"] = graph
         self.register_graph(graph)
@@ -221,12 +221,13 @@ class SakDbNamespace(object):
             return False
         return True
 
-    def node_keys(self) -> List[str]:
-        return []
+    def populate_object_keys(self) -> None:
+        raise Exception("Not implemented")
 
     def get_object_keys(self) -> Set[str]:
         # TODO: Use generators for this.
-        return set(self.objects.keys()) | set(self.node_keys())
+        self.populate_object_keys()
+        return set(self.objects.keys())
 
     def get_objects(self) -> List["SakDbObject"]:
         ret = []
@@ -238,7 +239,9 @@ class SakDbNamespace(object):
         # Check if there is already this key in the graph, then return it.
         # Otherwise create this object in the Namespace and return it.
         if key in self.objects:
-            return self.objects[key]
+            obj = self.objects[key]
+            if obj is not None:
+                return obj
 
         # Choose the proper class and then instantiate this specific class.
         cl_fields = self.read(key, "_cl")
@@ -270,11 +273,8 @@ class SakDbNamespace(object):
                 return obj
 
     def has_object(self, key: str) -> bool:
-        try:
-            obj = self.get_object(key)
-        except Exception:
-            return False
-        return obj is not None
+        self.populate_object_keys()
+        return key in self.objects
 
     def register_object(self, obj: "SakDbObject") -> None:
         if not self.has_object(obj.key):
@@ -415,6 +415,8 @@ class SakDbNamespaceGit(SakDbNamespace):
 
         self.namespace_branch = branch
         self.namespace_ref = f"refs/heads/{branch}"
+
+        self._last_hash_for_populated_objs: str = ""
 
         self._current_session_index: Optional[pygit2.Index] = None
         self._current_session_branch: Optional[str] = None
@@ -565,15 +567,19 @@ class SakDbNamespaceGit(SakDbNamespace):
                 remote.push([synced_branch.name])
                 remote.fetch()
 
-    def node_keys(self) -> List[str]:
-        # TODO: This should be a generator.
-        ret: List[str] = []
-
+    def populate_object_keys(self) -> None:
         namespace_ref = self.repo.references[self.namespace_ref].target
-        tree = self.repo[namespace_ref].tree[self.name]
-        if "objects" not in tree:
-            return ret
 
+        if self._last_hash_for_populated_objs == namespace_ref:
+            return
+        self._last_hash_for_populated_objs = namespace_ref
+
+        tree = self.repo[namespace_ref].tree[self.name]
+
+        if "objects" not in tree:
+            return
+
+        # TODO(witt): Is there a better way of walking through the tree?
         tree = tree["objects"]
         for obj in tree:
             if obj.type_str == "tree":
@@ -581,9 +587,9 @@ class SakDbNamespaceGit(SakDbNamespace):
                     for obj3 in self.repo[obj2.id]:
                         for obj4 in self.repo[obj3.id]:
                             for obj5 in self.repo[obj4.id]:
-                                ret.append(obj5.name)
-
-        return ret
+                                key = obj5.name
+                                if key not in self.objects:
+                                    self.objects[key] = None
 
     def _read_blob(self, ref: str, path: Path) -> Optional[pygit2.Object]:
         try:
