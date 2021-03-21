@@ -278,7 +278,9 @@ class SakDbNamespace(object):
             )
         return ret
 
-    def read_sakdb(self, path: Path) -> Optional[SakDbFields]:
+    def read_sakdb(
+        self, path: Path, branch: Optional[str] = None
+    ) -> Optional[SakDbFields]:
         # Try to read from the Session, if not available read from the disk.
         if self.graph is not None:
             session = self.graph.current_session
@@ -287,7 +289,7 @@ class SakDbNamespace(object):
                 if session_value is not None:
                     return session_value
 
-        value_str = self._read(path)
+        value_str = self._read(path, branch)
         if value_str is None:
             return None
         return sakdb_loads(value_str)
@@ -305,7 +307,7 @@ class SakDbNamespace(object):
         data_path = node_path / data_key
         return self.read_sakdb(data_path)
 
-    def get_metadata(self, key: str) -> Any:
+    def get_metadata(self, key: str, branch: Optional[str] = None) -> Any:
         metada_path = Path(self.name) / "metadata" / key
 
         data = self.read_sakdb(metada_path)
@@ -387,7 +389,7 @@ class SakDbNamespace(object):
     def close_session(self, name: str, msg: str) -> None:
         raise Exception("Not implemented")
 
-    def _read(self, path: Path) -> Optional[str]:
+    def _read(self, path: Path, branch: Optional[str] = None) -> Optional[str]:
         raise Exception("Not implemented")
 
     def _write(self, path: Path, value: str) -> None:
@@ -525,9 +527,22 @@ class SakDbNamespaceGit(SakDbNamespace):
 
             # Merge the synced branch with all the remote synced branches.
             for remote_branch_name in self.repo.branches.remote:
+
                 if not remote_branch_name.endswith(synced_branch_name):
                     continue
                 remote_branch = self.repo.branches[remote_branch_name]
+
+                remote_branch_version = self.get_metadata(
+                    "version", remote_branch.target
+                )
+                if remote_branch_version is not None:
+                    if not self._validate_version(remote_branch_version):
+                        msg = (
+                            f"WARNING! Cannot sync with {remote_branch_name} because the version"
+                            f" {remote_branch_version} is not compatible with {VERSION}"
+                        )
+                        raise Exception(msg)
+                        # continue
 
                 synced_branch = self.repo.branches[synced_branch_name]
                 self.do_merge(synced_branch, remote_branch)
@@ -569,10 +584,13 @@ class SakDbNamespaceGit(SakDbNamespace):
             # Exception("Could not read {path} in {self}.")
             return None
 
-    def _read(self, path: Path) -> Optional[str]:
+    def _read(self, path: Path, branch: Optional[str] = None) -> Optional[str]:
         blob: Optional[pygit2.Object] = None
 
-        if self._current_session_branch is not None:
+        if branch is not None:
+            # Try in session index.
+            blob = self._read_blob(branch, path)
+        elif self._current_session_branch is not None:
             # Try in session index.
             blob = self._read_blob(f"refs/heads/{self._current_session_branch}", path)
         else:
