@@ -733,7 +733,11 @@ class SakDbEncoder(json.JSONEncoder):
 
     def default(self, value: Any) -> Any:
         if isinstance(value, SakDbObject):
-            return {"_type": "SakDbObject", "key": value.key}
+            return {
+                "_type": "SakDbObject",
+                "nm": value.namespace.name,
+                "key": value.key,
+            }
         else:
             return super(SakDbEncoder, self).default(value)
 
